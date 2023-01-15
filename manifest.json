@@ -1,0 +1,12 @@
+{
+  "domain": "saj_mqtt",
+  "name": "SAJ MQTT",
+  "version": "0.1",
+  "requirements": ["mqtt"],
+  "dependencies": [],
+  "issue_tracker": "",
+  "documentation": "",
+  "codeowners": ["@paolosabatino"],
+  "iot_class": "local_push",
+  "loggers": ["saj_mqtt"]
+}
