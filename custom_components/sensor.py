@@ -31,7 +31,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.components import mqtt
 from homeassistant.components.mqtt import valid_publish_topic
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, PlatformNotReady
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.update_coordinator import (
@@ -75,7 +75,7 @@ MAP_SAJ_REALTIME_DATA = (
     ("second", 0x6, ">B", None, None, None, None),
 
     ("heatsink_temperature", 0x20, ">h", 0.1, TEMP_CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT),
-    ("earth_leakage_current", 0x24, ">H", 1.0, ELECTRIC_CURRENT_MILLIAMPERE, SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT),
+    ("earth_leakage_current_ma", 0x24, ">H", 1.0, ELECTRIC_CURRENT_MILLIAMPERE, SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT),
     # Power grid data
     ("grid_voltage", 0x62, ">H", 0.1, ELECTRIC_POTENTIAL_VOLT, SensorDeviceClass.VOLTAGE, SensorStateClass.MEASUREMENT),
     ("grid_current", 0x64, ">h", 0.01, ELECTRIC_CURRENT_AMPERE, SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT),
@@ -121,6 +121,7 @@ MAP_SAJ_REALTIME_DATA = (
 
     # Power summaries
     ("summary_system_load", 0x140, ">H", 1.0, UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT),
+    ("smart_meter_load", 0x142, ">h", 1.0, UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT),
     ("summary_photovoltaic_power", 0x14a, ">H", 1.0, UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT),
     ("summary_battery_power", 0x14c, ">h", 1.0, UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT),
     ("summary_grid_power", 0x14e, ">h", 1.0, UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT),
@@ -271,7 +272,7 @@ async def async_setup_platform(
 
     try:
         sub_state = await _subscribe_topics(hass, None, serial_number)
-    except homeassistant.exceptions.HomeAssistantError as ex:
+    except HomeAssistantError as ex:
         raise PlatformNotReady(f"could not subscribe topics, reason: {ex}")
 
     _LOGGER.debug("subscription done")
