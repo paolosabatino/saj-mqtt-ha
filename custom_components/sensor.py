@@ -31,7 +31,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.components import mqtt
 from homeassistant.components.mqtt import valid_publish_topic
-from homeassistant.exceptions import HomeAssistantError, PlatformNotReady
+from homeassistant.exceptions import HomeAssistantError, PlatformNotReady, ConfigEntryNotReady
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.update_coordinator import (
@@ -310,8 +310,11 @@ async def async_setup_platform(
 
     _LOGGER.info("populated %d sensors" % (len(sensors),))
 
-    coordinator = SajMqttCoordinator(hass, serial_number)
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        coordinator = SajMqttCoordinator(hass, serial_number)
+        await coordinator.async_config_entry_first_refresh()
+    except Exception as ex:
+        raise PlatformNotReady(f"could not start coordinator, reason: {ex}")
 
     _LOGGER.debug("coordinator initialized")
 
@@ -367,26 +370,31 @@ class SajMqttCoordinator(DataUpdateCoordinator):
             # Cleanup the previous responses, we don't need them anymore
             responses.clear()
 
-            # Publish the request MQTT packets
-            for packet, req_id in packets:
-                responses[req_id] = None
-                await self.mqtt.async_publish(self.hass, self.topic, packet, 2, False, None)
-                _LOGGER.info("sent data_transmission MQTT packet with req_id: 0x%x" % (req_id, ))
+            try:
+                # Publish the request MQTT packets
+                for packet, req_id in packets:
+                    responses[req_id] = None
+                    await self.mqtt.async_publish(self.hass, self.topic, packet, 2, False, None)
+                    _LOGGER.info("sent data_transmission MQTT packet with req_id: 0x%x" % (req_id, ))
 
-            _LOGGER.info("sent done")
+                _LOGGER.info("sent done")
 
-            # Wait for the answer packets
-            while True:
-                if all(responses.values()) is True:
-                    break
-                await asyncio.sleep(1)
+                # Wait for the answer packets
+                while True:
+                    if all(responses.values()) is True:
+                        break
+                    await asyncio.sleep(1)
 
-            _LOGGER.info("answers received")
+                _LOGGER.info("answers received")
 
-            # Concatenate the payloads, so we get the full answer
-            data = bytearray()
-            for req_id, response in responses.items():
-                data += response
+                # Concatenate the payloads, so we get the full answer
+                data = bytearray()
+                for req_id, response in responses.items():
+                    data += response
+
+            except HomeAssistantError as ex:
+                _LOGGER.warning("could not send data_transmission MQTT packets, reason: %s" % (ex,))
+                data = None
 
             return data
 
@@ -416,6 +424,9 @@ class PolledSensor(CoordinatorEntity, SensorEntity):
         This is the only method that should fetch new data for Home Assistant.
         """
         payload = self.coordinator.data
+
+        if payload is None:
+            return
 
         value, = unpack_from(self.data_type, payload, self.offset)
 
