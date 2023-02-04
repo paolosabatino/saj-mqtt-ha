@@ -44,6 +44,7 @@ from pymodbus.utilities import computeCRC
 from random import random
 from collections import OrderedDict
 from datetime import datetime, timedelta
+from .sajmqtt import SajMqtt
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 import logging
@@ -136,104 +137,6 @@ MAP_SAJ_ENERGY_STATS = (
     ('energy_imported', 0x1ee)
 )
 
-# Responses to MQTT data_transmission requests
-responses = OrderedDict()
-
-@attr.s(slots=True, frozen=True)
-class ReceiveMessage:
-    """MQTT Message."""
-
-    topic: str = attr.ib()
-    payload: bytes = attr.ib()
-    qos: int = attr.ib()
-    retain: bool = attr.ib()
-
-def _handle_data_transmission_rsp(msg: ReceiveMessage) -> None:
-
-    topic = msg.topic
-    payload = msg.payload
-
-    try:
-        req_id, size, content = parse_packet(payload)
-        _LOGGER.debug("%s: req_id: 0x%x, content length: %d" % (topic, req_id, len(content)))
-
-        if req_id in responses:
-            responses[req_id] = content
-
-    except Exception as err:
-        _LOGGER.error("an error occurred while collecting data_transmission_rsp: %s" % (err,))
-
-def forge_packet(start: int, count: int) -> bytes:
-    """
-        Make a data_transmission mqtt body content to request registers from start for the
-        given amount of registers. We can query up to 123 registers with a single request
-    """
-
-    content = pack(">BBHH", 0x01, 0x03, start, count)
-    crc16 = computeCRC(content)
-
-    req_id = int(random() * 65536)
-    rnd_value = int(random() * 65536)
-
-    packet = pack(">HBBH", req_id, 0x58, 0xc9, rnd_value) + content + pack(">H", crc16)
-
-    _LOGGER.debug("Request ID: %04x - CRC16: %04x - Random: %04x" % (req_id, crc16, rnd_value))
-    _LOGGER.debug("Length: %d bytes" % (len(packet),))
-
-    packet = pack(">H", len(packet)) + packet
-
-    return packet, req_id
-
-def parse_packet(packet):
-    """
-        Parses a mqtt response data_transmission_rsp payload packet
-    """
-    length, req_id, timestamp, request = unpack_from(">HHIH", packet, 0x00)
-
-    date = datetime.fromtimestamp(timestamp)
-    size, = unpack_from(">B", packet, 0xa)
-    content = packet[0xb:0xb + size]
-    crc16, = unpack_from(">H", packet, 0xb + size)
-
-    # CRC is calculated starting from "request" at offset 0x3a
-    calc_crc = computeCRC(packet[0x8:0xb + size])
-
-    _LOGGER.debug("Packet length: %d bytes - Request ID: %4x - Request type: %4x" % (length, req_id, request))
-    _LOGGER.debug("Timestamp: %s" % (date,))
-    _LOGGER.debug("Register size: %d" % (size,))
-    _LOGGER.debug("Register content: %s" % (":".join("%02x" % (byte,) for byte in content),))
-    _LOGGER.debug("CRC16: %x: %s" % (crc16, "ok" if crc16 == calc_crc else "bad"))
-
-    return req_id, size, content
-
-async def _subscribe_topics(hass: HomeAssistant, sub_state: dict | None, serial_number: str) -> dict:
-    # Optionally mark message handlers as callback
-
-    topics = {
-        "data_transmission_rsp": {
-            "topic": f"saj/{serial_number}/data_transmission_rsp",
-            "msg_callback": _handle_data_transmission_rsp,
-            "encoding": None
-        }
-    }
-
-    _LOGGER.debug("subscribing to topics %s" % (topics.keys(),))
-
-    mqtt = hass.components.mqtt
-    unsubscribe_callbacks = dict()
-
-    for item, topic_data in topics.items():
-        unsubscribe = await mqtt.async_subscribe(topic_data['topic'], topic_data['msg_callback'], 0x2, topic_data['encoding'])
-
-    return unsubscribe_callbacks
-
-async def _unsubscribe_topics(sub_state: dict | None) -> None:
-    for item, callback in sub_state.items():
-        await callback()
-
-    return
-    # return async_unsubscribe_topics(hass, sub_state)
-
 async def async_setup_platform(
     hass: HomeAssistant,
     config: ConfigType,
@@ -247,17 +150,18 @@ async def async_setup_platform(
     _LOGGER.info("setup_platform - inverter serial: %s" % (serial_number,))
 
     try:
-        sub_state = await _subscribe_topics(hass, None, serial_number)
+        saj_mqtt = SajMqtt(hass, serial_number)
+        sub_state = await saj_mqtt.initialize()
     except HomeAssistantError as ex:
-        raise PlatformNotReady(f"could not subscribe topics, reason: {ex}")
+        raise PlatformNotReady(f"could not initialize SajMqtt component, reason: {ex}")
 
     _LOGGER.debug("subscription done")
 
     try:
-        coordinator = SajMqttCoordinator(hass, serial_number, scan_interval)
+        coordinator = SajMqttCoordinator(hass, saj_mqtt, scan_interval)
         await coordinator.async_config_entry_first_refresh()
     except Exception as ex:
-        raise PlatformNotReady(f"could not start coordinator, reason: {ex}")
+        raise PlatformNotReady(f"could not start SajMqttCoordinator, reason: {ex}")
 
     _LOGGER.debug("coordinator initialized")
 
@@ -297,7 +201,7 @@ async def async_setup_platform(
 class SajMqttCoordinator(DataUpdateCoordinator):
     """SAJ MQTT data update coordinator"""
 
-    def __init__(self, hass: HomeAssistant, serial_number: str, scan_interval: int) -> None:
+    def __init__(self, hass: HomeAssistant, saj_mqtt: SajMqtt, scan_interval: int) -> None:
         super().__init__(
             hass,
             _LOGGER,
@@ -307,9 +211,7 @@ class SajMqttCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=scan_interval),
         )
 
-        self.hass = hass
-        self.mqtt = hass.components.mqtt
-        self.topic = f"saj/{serial_number}/data_transmission"
+        self.saj_mqtt = saj_mqtt
 
     async def _async_update_data(self):
         """Fetch data from API endpoint.
@@ -320,44 +222,9 @@ class SajMqttCoordinator(DataUpdateCoordinator):
 
         _LOGGER.info("SajMqttCoordinator async update")
 
-        async with async_timeout.timeout(10):
-            # Forge the MQTT data_transmission packets to send to the inverter
-            packets = [
-                forge_packet(0x4000, 0x64),
-                forge_packet(0x4064, 0x64),
-                forge_packet(0x40c8, 0x37)
-            ]
+        data = await self.saj_mqtt.query(0x4000, 0x100)
 
-            # Cleanup the previous responses, we don't need them anymore
-            responses.clear()
-
-            try:
-                # Publish the request MQTT packets
-                for packet, req_id in packets:
-                    responses[req_id] = None
-                    await self.mqtt.async_publish(self.hass, self.topic, packet, 2, False, None)
-                    _LOGGER.info("sent data_transmission MQTT packet with req_id: 0x%x" % (req_id, ))
-
-                _LOGGER.info("sent done")
-
-                # Wait for the answer packets
-                while True:
-                    if all(responses.values()) is True:
-                        break
-                    await asyncio.sleep(1)
-
-                _LOGGER.info("answers received")
-
-                # Concatenate the payloads, so we get the full answer
-                data = bytearray()
-                for req_id, response in responses.items():
-                    data += response
-
-            except HomeAssistantError as ex:
-                _LOGGER.warning("could not send data_transmission MQTT packets, reason: %s" % (ex,))
-                data = None
-
-            return data
+        return data
 
 class PolledSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, serial_number, config_tuple):
