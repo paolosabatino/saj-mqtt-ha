@@ -13,10 +13,8 @@ from homeassistant.const import UnitOfPower
 from homeassistant.const import UnitOfEnergy
 
 from homeassistant.const import (
-    CONF_HOST,
     CONF_NAME,
-    CONF_PASSWORD,
-    CONF_USERNAME,
+    CONF_SCAN_INTERVAL,
     ELECTRIC_POTENTIAL_VOLT,
     ELECTRIC_CURRENT_AMPERE,
     ELECTRIC_CURRENT_MILLIAMPERE,
@@ -57,14 +55,12 @@ _LOGGER = logging.getLogger("saj_mqtt")
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
-        vol.Required(CONF_HOST): cv.string,
         vol.Required(CONF_NAME): cv.string,
-        vol.Optional(CONF_USERNAME): cv.string,
-        vol.Optional(CONF_PASSWORD): cv.string,
+        vol.Optional(CONF_SCAN_INTERVAL, default=60): cv.positive_int
     }
 )
 
-# realtime_data packet fields
+# realtime data packet fields
 MAP_SAJ_REALTIME_DATA = (
     # General info
     ("year", 0x0, ">H", None, None, None, None),
@@ -140,9 +136,6 @@ MAP_SAJ_ENERGY_STATS = (
     ('energy_imported', 0x1ee)
 )
 
-# This list of sensors will be populated during setup phase with Sensor class instances
-sensors = []
-
 # Responses to MQTT data_transmission requests
 responses = OrderedDict()
 
@@ -154,18 +147,6 @@ class ReceiveMessage:
     payload: bytes = attr.ib()
     qos: int = attr.ib()
     retain: bool = attr.ib()
-
-def _handle_realtime_data(msg: ReceiveMessage) -> None:
-
-    topic = msg.topic
-    payload = msg.payload[0x24:0x224]
-
-    _LOGGER.debug("Received message, topic: %s, length: %d" % (topic, len(payload)))
-
-    for sensor in sensors:
-        sensor.update(payload)
-
-    _LOGGER.debug("Updated %d sensors" % (len(sensors),))
 
 def _handle_data_transmission_rsp(msg: ReceiveMessage) -> None:
 
@@ -229,11 +210,6 @@ async def _subscribe_topics(hass: HomeAssistant, sub_state: dict | None, serial_
     # Optionally mark message handlers as callback
 
     topics = {
-        "realtime_data": {
-            "topic": f"saj/{serial_number}/realtime_data",
-            "msg_callback": _handle_realtime_data,
-            "encoding": None
-        },
         "data_transmission_rsp": {
             "topic": f"saj/{serial_number}/data_transmission_rsp",
             "msg_callback": _handle_data_transmission_rsp,
@@ -265,10 +241,10 @@ async def async_setup_platform(
     discovery_info: DiscoveryInfoType | None = None
 ) -> None:
 
-    broker_host = config[CONF_HOST]
     serial_number = config[CONF_NAME]
+    scan_interval = config[CONF_SCAN_INTERVAL]
 
-    _LOGGER.info("setup_platform, broker host: %s - inverter serial: %s" % (broker_host, serial_number))
+    _LOGGER.info("setup_platform - inverter serial: %s" % (serial_number,))
 
     try:
         sub_state = await _subscribe_topics(hass, None, serial_number)
@@ -277,41 +253,8 @@ async def async_setup_platform(
 
     _LOGGER.debug("subscription done")
 
-    """Set up the sensor platform."""
-    """
-    for config_tuple in MAP_SAJ_REALTIME_DATA:
-
-        # If a field has no SensorDeviceClass, skip the creation of the sensor
-        if config_tuple[5] is None:
-            continue
-
-        sensor = Sensor(serial_number, config_tuple)
-        sensors.append(sensor)
-
-        _LOGGER.debug("created sensor %s" % (config_tuple[0],))
-    """
-
-    """
-        Set up the energy data statistics sensors. For each "category" there are four spannig periods,
-        so each category creates four sensors
-    """
-    for config_tuple in MAP_SAJ_ENERGY_STATS:
-
-        name, offset = config_tuple
-
-        for period in 'daily', 'monthly', 'yearly', 'total':
-            sensor_name = f"{name}_{period}"
-            sensor = EnergyStatSensor(serial_number, sensor_name, offset)
-            sensors.append(sensor)
-
-            _LOGGER.debug("created sensor %s" % (sensor_name,))
-
-            offset += 4
-
-    _LOGGER.info("populated %d sensors" % (len(sensors),))
-
     try:
-        coordinator = SajMqttCoordinator(hass, serial_number)
+        coordinator = SajMqttCoordinator(hass, serial_number, scan_interval)
         await coordinator.async_config_entry_first_refresh()
     except Exception as ex:
         raise PlatformNotReady(f"could not start coordinator, reason: {ex}")
@@ -330,20 +273,38 @@ async def async_setup_platform(
 
         _LOGGER.debug("created polled sensor %s" % (config_tuple[0],))
 
-    add_entities(sensors)
+    """
+        Set up the energy data statistics sensors. For each "category" there are four spannig periods,
+        so each category creates four sensors
+    """
+    for config_tuple in MAP_SAJ_ENERGY_STATS:
+
+        name, offset = config_tuple
+
+        for period in 'daily', 'monthly', 'yearly', 'total':
+            sensor_name = f"{name}_{period}"
+            sensor = EnergyStatPolledSensor(coordinator, serial_number, sensor_name, offset)
+            polled_sensors.append(sensor)
+
+            _LOGGER.debug("created energy sensor %s" % (sensor_name,))
+
+            offset += 4
+
+    _LOGGER.info("populated %d polled sensors" % (len(polled_sensors),))
+
     add_entities(polled_sensors)
 
 class SajMqttCoordinator(DataUpdateCoordinator):
     """SAJ MQTT data update coordinator"""
 
-    def __init__(self, hass: HomeAssistant, serial_number: str) -> None:
+    def __init__(self, hass: HomeAssistant, serial_number: str, scan_interval: int) -> None:
         super().__init__(
             hass,
             _LOGGER,
             # Name of the data. For logging purposes.
             name="saj_mqtt",
             # Polling interval. Will only be polled if there are subscribers.
-            update_interval=timedelta(seconds=60),
+            update_interval=timedelta(seconds=scan_interval),
         )
 
         self.hass = hass
@@ -414,6 +375,7 @@ class PolledSensor(CoordinatorEntity, SensorEntity):
         self._attr_state_class = state_class
 
         self._attr_name = sensor_name
+        self._attr_friendly_name = f"saj_inverter_{serial_number}{sensor_name}"
         self.serial_number = serial_number
 
     @callback
@@ -444,57 +406,15 @@ class PolledSensor(CoordinatorEntity, SensorEntity):
         """Return a unique identifier for this sensor."""
         return f"saj_mqtt_{self.serial_number}_{self._attr_name}"
 
-class Sensor(SensorEntity):
-    """Representation of a Sensor."""
-
-    _attr_should_poll = False
-
-    def __init__(self, serial_number: str, config_tuple: tuple) -> None:
-        self.serial_number = serial_number
-
-        sensor_name, offset, data_type, scale, unit, device_class, state_class = config_tuple
-
-        self.sensor_name = sensor_name
-        self.data_type = data_type
-        self.offset = offset
-        self.scale = scale
-
-        self._attr_native_unit_of_measurement = unit
-        self._attr_device_class = device_class
-        self._attr_state_class = state_class
-
-        self._attr_name = sensor_name
-
-    def update(self, payload: bytes) -> None:
-        """Fetch new state data for the sensor.
-
-        This is the only method that should fetch new data for Home Assistant.
-        """
-        value, = unpack_from(self.data_type, payload, self.offset)
-
-        _LOGGER.debug("sensor: %s, raw value: %s, scale: %s" % (self.sensor_name, value, self.scale))
-
-        if self.scale is not None:
-            value *= self.scale
-
-        self._attr_native_value = value
-
-        self.schedule_update_ha_state()
-
-    @property
-    def unique_id(self):
-        """Return a unique identifier for this sensor."""
-        return f"saj_mqtt_{self.serial_number}_{self._attr_name}"
-
-class EnergyStatSensor(SensorEntity):
+class EnergyStatPolledSensor(CoordinatorEntity, SensorEntity):
     """
         Sensor specific for energy statistics.
         All the sensors of this kind use KWh as data type, scale is x0.01 and sensors are dword unsigned integers
     """
 
-    _attr_should_poll = False
+    def __init__(self, coordinator, serial_number: str, sensor_name: str, offset: int) -> None:
+        super().__init__(coordinator)
 
-    def __init__(self, serial_number: str, sensor_name: str, offset: int) -> None:
         self.serial_number = serial_number
 
         self.sensor_name = sensor_name
@@ -505,19 +425,26 @@ class EnergyStatSensor(SensorEntity):
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
 
         self._attr_name = sensor_name
+        self._attr_friendly_name = f"saj_inverter_{serial_number}{sensor_name}"
 
-    def update(self, payload: bytes) -> None:
+    def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor.
 
         This is the only method that should fetch new data for Home Assistant.
         """
+
+        payload = self.coordinator.data
+
+        if payload is None:
+            return
+
         value, = unpack_from(">I", payload, self.offset)
 
         _LOGGER.debug("sensor: %s, raw value: %s" % (self.sensor_name, value))
 
         self._attr_native_value = value * 0.01
 
-        self.schedule_update_ha_state()
+        self.async_write_ha_state()
 
     @property
     def unique_id(self):
