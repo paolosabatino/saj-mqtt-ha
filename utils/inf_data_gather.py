@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # information gathering for saj inverters through data_transmission mqtt topic
-# usage example: ./inf_data_gather.py 192.168.16.1 H1S2602J2119E01121 0x4000 0x100 2>/dev/null | python3 saj.py -p
+# usage example: ./inf_data_gather.py 192.168.16.1 H1S2602J2119E01121 0x4000 0x100 2>/dev/null | python3 parse_realtime_data.py -p
 
 from collections import OrderedDict
 from struct import pack, unpack_from

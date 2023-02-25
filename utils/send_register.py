@@ -1,6 +1,6 @@
 #!/usr/bin/python3
-# information gathering for saj inverters through data_transmission mqtt topic
-# usage example: ./inf_data_gather.py H1S2602J2119E01121 2>/dev/null | python3 saj.py
+# register writing for saj inverters through data_transmission mqtt topic
+# usage example: send_register.py <broker_ip> <serial> <register> <value>
 
 from collections import OrderedDict
 from struct import pack, unpack_from
