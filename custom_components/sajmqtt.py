@@ -135,7 +135,7 @@ class SajMqtt(object):
                 self.responses[req_id] = content
 
         except Exception as err:
-            _LOGGER.error("an error occurred while collecting data_transmission_rsp: %s" % (err,))
+            _LOGGER.error("An error occurred while collecting data_transmission_rsp: %s" % (err,))
 
     async def _subscribe_topics(self) -> dict:
         """
@@ -151,7 +151,7 @@ class SajMqtt(object):
             }
         }
 
-        _LOGGER.debug("subscribing to topics %s" % (topics.keys(),))
+        _LOGGER.debug("Subscribing to topics %s" % (topics.keys(),))
 
         mqtt = self.mqtt
         unsubscribe_callbacks = dict()
@@ -189,8 +189,6 @@ class SajMqtt(object):
             case the results do not arrive or None in case data could not be sent
         """
 
-        _LOGGER.info("SajMqttCoordinator async update")
-
         mqtt = self.mqtt
         responses = self.responses
         topic = f"saj/{self.serial_number}/{SajMqtt.MQTT_DATA_TRANSMISSION}"
@@ -212,9 +210,9 @@ class SajMqtt(object):
                 for packet, req_id in packets:
                     responses[req_id] = None
                     await mqtt.async_publish(self.hass, topic, packet, 2, False, None)
-                    _LOGGER.debug("sent data_transmission MQTT packet with req_id: 0x%x" % (req_id, ))
+                    _LOGGER.debug("Published data_transmission MQTT packet with req_id: 0x%x" % (req_id, ))
 
-                _LOGGER.info("sent done")
+                _LOGGER.debug("All MQTT packets published")
 
                 # Wait for the answer packets
                 while True:
@@ -222,7 +220,7 @@ class SajMqtt(object):
                         break
                     await asyncio.sleep(1)
 
-                _LOGGER.info("answers received")
+                _LOGGER.debug("All MQTT responses received")
 
                 # Concatenate the payloads, so we get the full answer
                 data = bytearray()
@@ -230,10 +228,10 @@ class SajMqtt(object):
                     data += response
 
         except TimeoutError as te:
-            _LOGGER.warning("timeout error, inverter did not answer in expected timeout")
+            _LOGGER.warning("Timeout error, inverter did not answer in expected timeout")
             data = None
         except HomeAssistantError as ex:
-            _LOGGER.warning("could not send data_transmission MQTT packets, reason: %s" % (ex,))
+            _LOGGER.warning("Could not publish data_transmission MQTT packets, reason: %s" % (ex,))
             data = None
 
         # Cleanup self.responses from request ids generated in this method
