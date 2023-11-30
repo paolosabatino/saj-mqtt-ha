@@ -107,7 +107,7 @@ MAP_SAJ_REALTIME_DATA = (
     ("battery_control_current_2", 0xd8, ">h", 0.01, ELECTRIC_CURRENT_AMPERE, SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT),
     ("battery_power", 0xda, ">h", 1.0, UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT),
     ("battery_temperature", 0xdc, ">h", 0.1, TEMP_CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT),
-    ("battery_percentage", 0xde, ">H", 0.01, PERCENTAGE, SensorDeviceClass.BATTERY, SensorStateClass.MEASUREMENT),
+    ("battery_soc", 0xde, ">H", 0.01, PERCENTAGE, SensorDeviceClass.BATTERY, SensorStateClass.MEASUREMENT),
 
     # Photovoltaic data
     ("panel_array_1_voltage", 0xe2, ">H", 0.1, ELECTRIC_POTENTIAL_VOLT, SensorDeviceClass.VOLTAGE, SensorStateClass.MEASUREMENT),
