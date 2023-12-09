@@ -3,7 +3,7 @@
   "name": "SAJ MQTT",
   "version": "0.1",
   "requirements": ["mqtt"],
-  "dependencies": [],
+  "dependencies": ["mqtt"],
   "issue_tracker": "",
   "documentation": "",
   "codeowners": ["@paolosabatino"],
