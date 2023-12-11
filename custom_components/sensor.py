@@ -141,7 +141,7 @@ MAP_SAJ_ENERGY_STATS = (
 async def async_setup_platform(
     hass: HomeAssistant,
     config: ConfigType,
-    add_entities: AddEntitiesCallback,
+    async_add_entities: AddEntitiesCallback,
     discovery_info: DiscoveryInfoType | None = None
 ) -> None:
 
@@ -152,19 +152,22 @@ async def async_setup_platform(
 
     try:
         saj_mqtt = SajMqtt(hass, serial_number)
-        sub_state = await saj_mqtt.initialize()
+        _LOGGER.debug('Initializing mqtt')
+        await saj_mqtt.initialize()
+        _LOGGER.debug('Mqtt initialized')
     except HomeAssistantError as ex:
-        raise PlatformNotReady(f"Could not initialize SajMqtt component, reason: {ex}")
-
-    _LOGGER.debug("Mqtt subscriptions done")
+        raise PlatformNotReady(f"Could not setup SajMqtt component, reason: {ex}")
 
     try:
+        _LOGGER.debug('Initializing coordinator')
         coordinator = SajMqttCoordinator(hass, saj_mqtt, scan_interval)
+        _LOGGER.debug("Coordinator initialized")
         await coordinator.async_config_entry_first_refresh()
+        _LOGGER.debug("Coordinator first refresh done")
     except Exception as ex:
-        raise PlatformNotReady(f"could not start SajMqttCoordinator, reason: {ex}")
+        raise PlatformNotReady(f"Could not start SajMqttCoordinator, reason: {ex}")
 
-    _LOGGER.debug("Coordinator initialized")
+    _LOGGER.info("Setting up sensors")
 
     polled_sensors = []
     for config_tuple in MAP_SAJ_REALTIME_DATA:
@@ -191,13 +194,13 @@ async def async_setup_platform(
             sensor = EnergyStatPolledSensor(coordinator, serial_number, sensor_name, offset)
             polled_sensors.append(sensor)
 
-            _LOGGER.debug("Created energy sensor %s" % (sensor_name,))
+            _LOGGER.debug("Created polled energy statistics sensor %s" % (sensor_name,))
 
             offset += 4
 
-    _LOGGER.info("Populated %d polled sensors" % (len(polled_sensors),))
+    _LOGGER.info("Created %d polled sensors" % (len(polled_sensors),))
 
-    add_entities(polled_sensors)
+    async_add_entities(polled_sensors)
 
 class SajMqttCoordinator(DataUpdateCoordinator):
     """SAJ MQTT data update coordinator"""
@@ -294,6 +297,7 @@ class EnergyStatPolledSensor(CoordinatorEntity, SensorEntity):
 
         self._attr_name = f"{DOMAIN}_{self.sensor_name}"
 
+    @callback
     def _handle_coordinator_update(self) -> None:
         """Fetch new state data for the sensor.
 

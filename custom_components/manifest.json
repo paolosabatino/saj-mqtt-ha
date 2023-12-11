@@ -2,7 +2,7 @@
   "domain": "saj_mqtt",
   "name": "SAJ MQTT",
   "version": "0.1",
-  "requirements": ["mqtt"],
+  "requirements": [],
   "dependencies": ["mqtt"],
   "issue_tracker": "",
   "documentation": "",

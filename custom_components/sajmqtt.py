@@ -128,6 +128,7 @@ class SajMqtt(object):
         payload = msg.payload
 
         try:
+            _LOGGER.debug("Received data_transmission MQTT packet")
             req_id, size, content = self._parse_packet(payload)
             _LOGGER.debug("%s: req_id: 0x%x, content length: %d" % (topic, req_id, len(content)))
 
@@ -157,7 +158,7 @@ class SajMqtt(object):
         unsubscribe_callbacks = dict()
 
         for item, topic_data in topics.items():
-            unsubscribe_callbacks[item] = await mqtt.async_subscribe(topic_data['topic'], topic_data['msg_callback'], 0x2, topic_data['encoding'])
+            unsubscribe_callbacks[item] = await mqtt.async_subscribe(topic_data['topic'], topic_data['msg_callback'], 2, topic_data['encoding'])
 
         return unsubscribe_callbacks
 
@@ -166,6 +167,8 @@ class SajMqtt(object):
             Make a data_transmission mqtt body content to request registers from start for the
             given amount of registers. We can query up to 123 registers with a single request
         """
+
+        _LOGGER.debug("Creating MQTT packet")
 
         content = pack(">BBHH", 0x01, 0x03, start, count)
         crc16 = computeCRC(content)
@@ -188,6 +191,8 @@ class SajMqtt(object):
             returns the raw bytes if successful, or raises a timeout exception in
             case the results do not arrive or None in case data could not be sent
         """
+
+        _LOGGER.debug("Querying inverter")
 
         mqtt = self.mqtt
         responses = self.responses
