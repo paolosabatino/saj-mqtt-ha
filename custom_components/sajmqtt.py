@@ -1,54 +1,16 @@
-import attr
-
-from homeassistant.components.sensor import (
-    PLATFORM_SCHEMA,
-    SensorDeviceClass,
-    SensorEntity,
-    SensorStateClass,
-)
-
-from homeassistant.const import UnitOfPower
-from homeassistant.const import UnitOfEnergy
-
-from homeassistant.const import (
-    CONF_NAME,
-    CONF_SCAN_INTERVAL,
-    ELECTRIC_POTENTIAL_VOLT,
-    ELECTRIC_CURRENT_AMPERE,
-    ELECTRIC_CURRENT_MILLIAMPERE,
-    POWER_VOLT_AMPERE,
-    FREQUENCY_HERTZ,
-    TEMP_CELSIUS,
-    TEMP_FAHRENHEIT,
-    TIME_HOURS,
-    PERCENTAGE
-)
-
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.components import mqtt
-from homeassistant.components.mqtt import valid_publish_topic
-from homeassistant.exceptions import HomeAssistantError, PlatformNotReady, ConfigEntryNotReady
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-    UpdateFailed,
-)
-
-from typing import Awaitable, Callable, Union
-from struct import unpack_from, pack
-from pymodbus.utilities import computeCRC
-from random import random
-from collections import OrderedDict
-from datetime import datetime, timedelta
-from asyncio.exceptions import TimeoutError
-import homeassistant.helpers.config_validation as cv
-import voluptuous as vol
-import logging
-import async_timeout
 import asyncio
-import time
+import logging
+from asyncio.exceptions import TimeoutError
+from collections import OrderedDict
+from datetime import datetime
+from random import random
+from struct import pack, unpack_from
+
+import async_timeout
+import attr
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+from pymodbus.utilities import computeCRC
 
 _LOGGER = logging.getLogger("saj_mqtt")
 
