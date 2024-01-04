@@ -1,5 +1,3 @@
-DOMAIN = "saj_mqtt"
-
 import logging
 from datetime import timedelta
 from struct import unpack_from
@@ -33,6 +31,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
 )
 
+from .const import DOMAIN
 from .sajmqtt import SajMqtt
 
 _LOGGER = logging.getLogger(DOMAIN)
