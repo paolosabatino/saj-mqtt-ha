@@ -23,7 +23,7 @@ class SajMqttCoordinator(DataUpdateCoordinator):
         )
         self.saj_mqtt = saj_mqtt
 
-    async def _async_update_data(self):
+    async def _async_update_data(self) -> bytearray | None:
         """Fetch the data."""
         # Query inverter via mqtt for data
         LOGGER.debug("Fetching data")

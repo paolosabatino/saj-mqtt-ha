@@ -14,10 +14,10 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     CONF_SCAN_INTERVAL,
-    CONF_SCAN_INTERVAL_DEFAULT_IN_SECONDS,
     CONF_SERIAL_NUMBER,
     DATA_COORDINATOR,
     DATA_SAJMQTT,
+    DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     LOGGER,
 )
@@ -31,7 +31,7 @@ CONFIG_SCHEMA = vol.Schema(
                 vol.Required(CONF_SERIAL_NUMBER): cv.string,
                 vol.Optional(
                     CONF_SCAN_INTERVAL,
-                    default=timedelta(seconds=CONF_SCAN_INTERVAL_DEFAULT_IN_SECONDS),
+                    default=DEFAULT_SCAN_INTERVAL,
                 ): cv.positive_time_period,
             }
         ),
@@ -56,11 +56,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         return False
 
     # Get config data
-    serial_number: str = config[DOMAIN].get(CONF_SERIAL_NUMBER)
+    conf = config[DOMAIN]
+    serial_number: str = conf[CONF_SERIAL_NUMBER]
     scan_interval: timedelta = (
-        config[DOMAIN].get(CONF_SCAN_INTERVAL)
-        if CONF_SCAN_INTERVAL in config[DOMAIN]
-        else timedelta(seconds=CONF_SCAN_INTERVAL_DEFAULT_IN_SECONDS)
+        conf[CONF_SCAN_INTERVAL]
+        if CONF_SCAN_INTERVAL in conf
+        else DEFAULT_SCAN_INTERVAL
     )
     LOGGER.info(
         f"Setting up SAJ MQTT integration - inverter serial: {serial_number} - scan interval: {scan_interval}"
@@ -74,13 +75,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     # Setup coordinator and load initial data
     LOGGER.debug("Setting up coordinator")
     coordinator = SajMqttCoordinator(hass, saj_mqtt, scan_interval)
+    # Disabled as it times out the first time
+    # Replaced by using update_before_add=True in async_add_entities() in sensor.py
+    # await coordinator.async_refresh()
     hass.data[DOMAIN][DATA_COORDINATOR] = coordinator
 
     LOGGER.debug("Setting up plaforms")
-    hass.async_create_task(
-        discovery.async_load_platform(hass, Platform.SENSOR, DOMAIN, {}, config)
-    )
-
-    hass.async_create_task(coordinator.async_refresh())
+    for plaform in PLATFORMS:
+        hass.async_create_task(
+            discovery.async_load_platform(hass, plaform, DOMAIN, {}, conf)
+        )
 
     return True

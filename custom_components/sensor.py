@@ -120,7 +120,7 @@ async def async_setup_platform(
     coordinator: SajMqttCoordinator = hass.data[DOMAIN][DATA_COORDINATOR]
 
     LOGGER.info("Setting up sensors")
-    polled_sensors = []
+    sensors = []
 
     # Realtime data sensors
     for config_tuple in MAP_SAJ_REALTIME_DATA:
@@ -129,7 +129,7 @@ async def async_setup_platform(
             continue
 
         sensor = RealtimeDataSensor(coordinator, saj_mqtt.serial_number, config_tuple)
-        polled_sensors.append(sensor)
+        sensors.append(sensor)
         LOGGER.debug(f"Creating sensor: {sensor.name}")
 
     # Energy statistics sensors
@@ -142,13 +142,15 @@ async def async_setup_platform(
             sensor = EnergyStatisticsSensor(
                 coordinator, saj_mqtt.serial_number, sensor_name, offset
             )
-            polled_sensors.append(sensor)
+            sensors.append(sensor)
             LOGGER.debug(f"Creating energy statistics sensor: {sensor.name}")
             offset += 4
 
     # Create the entities
-    LOGGER.info(f"Creating {len(polled_sensors)} sensors")
-    async_add_entities(polled_sensors)
+    # Use update_before_add=True
+    # This to replace await coordinator.async_refresh() in __init__.py
+    LOGGER.info(f"Creating {len(sensors)} sensors")
+    async_add_entities(sensors, update_before_add=True)
 
 
 class RealtimeDataSensor(CoordinatorEntity, SensorEntity):

@@ -133,7 +133,7 @@ class SajMqtt:
         start_register: int,
         count: int,
         timeout: int = SAJ_MQTT_DATA_TRANSMISSION_TIMEOUT,
-    ) -> bytes | None:
+    ) -> bytearray | None:
         """Query the inverter for a number of registers.
 
         This method hides all the package splitting and
