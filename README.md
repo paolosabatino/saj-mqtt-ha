@@ -11,12 +11,13 @@ Copy content of **custom_components** into your Home Assistant custom components
 
 Edit Home Assistant **configuration.yaml** (usually found in `/home/homeassistant/.homeassistant/configuration.yaml`) and add the following section:
 ```YAML
-sensor:
-  - platform: saj_mqtt
-    name: {inverter_serial_number}
+saj_mqtt:
+    serial_number: {inverter_serial_number}
+    scan_interval: {scan_interval}
 ```
 
-where `{inverter_serial_number}` is clearly the inverter serial number.
+- `{inverter_serial_number}` is the inverter serial number (required, f.e. `H1S2xxxxxxxxxxxxxx`)
+- `{scan_interval}` is the scan interval in seconds (optional, defaults to `60`)
 
 ## Configure the inverter
 The last step is to configure the inverter (actually the Wifi communication module AIO3 attached to the inverter) to talk with the local MQTT broker and not directly with the SAJ broker; to do that, you have two options:
