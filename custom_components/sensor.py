@@ -129,8 +129,8 @@ async def async_setup_platform(
             continue
 
         sensor = RealtimeDataSensor(coordinator, saj_mqtt.serial_number, config_tuple)
+        LOGGER.debug(f"Setting up realtime data sensor: {sensor.name}")
         sensors.append(sensor)
-        LOGGER.debug(f"Creating sensor: {sensor.name}")
 
     # Energy statistics sensors
     for config_tuple in MAP_SAJ_ENERGY_STATS:
@@ -142,14 +142,14 @@ async def async_setup_platform(
             sensor = EnergyStatisticsSensor(
                 coordinator, saj_mqtt.serial_number, sensor_name, offset
             )
+            LOGGER.debug(f"Setting up energy statistics sensor: {sensor.name}")
             sensors.append(sensor)
-            LOGGER.debug(f"Creating energy statistics sensor: {sensor.name}")
             offset += 4
 
-    # Create the entities
+    # Add the entities
     # Use update_before_add=True
     # This to replace await coordinator.async_refresh() in __init__.py
-    LOGGER.info(f"Creating {len(sensors)} sensors")
+    LOGGER.info(f"Setting up {len(sensors)} sensors")
     async_add_entities(sensors, update_before_add=True)
 
 
@@ -186,10 +186,11 @@ class RealtimeDataSensor(CoordinatorEntity, SensorEntity):
         """Handle updated data from the coordinator."""
         payload = self.coordinator.data
         if payload is None:
-            LOGGER.debug("No coordinator data available")
+            LOGGER.debug("No coordinator data received")
             return
 
         # Get raw sensor value
+        LOGGER.debug("Coordinator data received")
         (value,) = unpack_from(self.data_type, payload, self.offset)
         LOGGER.debug(f"Sensor: {self.name}, raw value: {value}, scale: {self.scale}")
 
