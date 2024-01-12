@@ -1,40 +1,32 @@
+"""SAJ MQTT inverter client."""
 import asyncio
-import logging
-from asyncio.exceptions import TimeoutError
 from collections import OrderedDict
+import contextlib
 from datetime import datetime
 from random import random
 from struct import pack, unpack_from
 
-import async_timeout
-import attr
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from pymodbus.utilities import computeCRC
 
-_LOGGER = logging.getLogger("saj_mqtt")
+from homeassistant.components.mqtt import ReceiveMessage
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 
-@attr.s(slots=True, frozen=True)
-class ReceiveMessage:
-    """MQTT Message."""
+from .const import (
+    LOGGER,
+    SAJ_MQTT_DATA_TRANSMISSION,
+    SAJ_MQTT_DATA_TRANSMISSION_RESP,
+    SAJ_MQTT_DATA_TRANSMISSION_TIMEOUT,
+    SAJ_MQTT_MAX_REGISTERS_PER_QUERY,
+    SAJ_MQTT_QOS,
+)
 
-    topic: str = attr.ib()
-    payload: bytes = attr.ib()
-    qos: int = attr.ib()
-    retain: bool = attr.ib()
 
-class SajMqtt(object):
+class SajMqtt:
+    """SAJ MQTT inverter client instance."""
 
-    MQTT_DATA_TRANSMISSION = "data_transmission"
-    MQTT_DATA_TRANSMISSION_RESP = "data_transmission_rsp"
-
-    # We can query up to 123 registers per MQTT packet request, this
-    # pseudo-constant controls the maximum number of registers to query
-    # at once. The logic will split the request in multiple mqtt packets
-    # automatically
-    MAX_REGISTERS_PER_QUERY = 64
-
-    def __init__(self, hass: HomeAssistant, serial_number: str):
+    def __init__(self, hass: HomeAssistant, serial_number: str) -> None:
+        """Set up the SajMqtt class."""
         super().__init__()
 
         self.hass = hass
@@ -43,169 +35,165 @@ class SajMqtt(object):
 
         self.responses = OrderedDict()
 
-        self.unsubscribe_callbacks = dict()
+        self.unsubscribe_callbacks = {}
 
     async def initialize(self) -> None:
-        """
-            Do the subscription of the topics.
-            If not possible, this call will raise a PlatformNotReady exception
-            that must be caught by caller
-        """
+        """Initialize."""
         self.unsubscribe_callbacks = await self._subscribe_topics()
 
     async def deinitialize(self) -> None:
-
+        """Deinitialize."""
         for item, callback in self.unsubscribe_callbacks.items():
             await callback()
 
-        return
-
     def _parse_packet(self, packet):
-        """
-            Parses a mqtt response data_transmission_rsp payload packet
-        """
+        """Parse a mqtt response data_transmission_rsp payload packet."""
         length, req_id, timestamp, request = unpack_from(">HHIH", packet, 0x00)
 
         date = datetime.fromtimestamp(timestamp)
-        size, = unpack_from(">B", packet, 0xa)
-        content = packet[0xb:0xb + size]
-        crc16, = unpack_from(">H", packet, 0xb + size)
+        (size,) = unpack_from(">B", packet, 0xA)
+        content = packet[0xB : 0xB + size]
+        (crc16,) = unpack_from(">H", packet, 0xB + size)
 
         # CRC is calculated starting from "request" at offset 0x3a
-        calc_crc = computeCRC(packet[0x8:0xb + size])
+        calc_crc = computeCRC(packet[0x8 : 0xB + size])
 
-        _LOGGER.debug("Packet length: %d bytes - Request ID: %4x - Request type: %4x" % (length, req_id, request))
-        _LOGGER.debug("Timestamp: %s" % (date,))
-        _LOGGER.debug("Register size: %d" % (size,))
-        _LOGGER.debug("Register content: %s" % (":".join("%02x" % (byte,) for byte in content),))
-        _LOGGER.debug("CRC16: %x: %s" % (crc16, "ok" if crc16 == calc_crc else "bad"))
+        LOGGER.debug(f"Request id: {req_id:04x}")
+        LOGGER.debug(f"Request type: {request:04x}")
+        LOGGER.debug(f"Length: {length} bytes")
+        LOGGER.debug(f"Timestamp: {date}")
+        LOGGER.debug(f"Register size: {size}")
+        LOGGER.debug(f"Register content: {':'.join(f'{byte:02x}' for byte in content)}")
+        LOGGER.debug(f"CRC16: {crc16}: {'ok' if crc16 == calc_crc else 'bad'}")
 
         return req_id, size, content
 
+    @callback
     def _handle_data_transmission_rsp(self, msg: ReceiveMessage) -> None:
-        """
-            Handle the single packet arriving from MQTT
-        """
+        """Handle a single packet received from MQTT."""
         topic = msg.topic
         payload = msg.payload
 
         try:
-            _LOGGER.debug("Received data_transmission MQTT packet")
+            LOGGER.debug(f"Received {SAJ_MQTT_DATA_TRANSMISSION_RESP} packet")
             req_id, size, content = self._parse_packet(payload)
-            _LOGGER.debug("%s: req_id: 0x%x, content length: %d" % (topic, req_id, len(content)))
-
             if req_id in self.responses:
+                LOGGER.debug("Required packet for request")
                 self.responses[req_id] = content
-
-        except Exception as err:
-            _LOGGER.error("An error occurred while collecting data_transmission_rsp: %s" % (err,))
+        except Exception as ex:
+            LOGGER.error(
+                f"Error while handling {SAJ_MQTT_DATA_TRANSMISSION_RESP} packet: {ex}"
+            )
 
     async def _subscribe_topics(self) -> dict:
-        """
-            Subscribe the topic to gather the answers from the inverter.
-            In case MQTT is not ready yet, this will raise a PlatformNotReady exception
-        """
-
+        """Subscribe to MQTT topics."""
         topics = {
-            SajMqtt.MQTT_DATA_TRANSMISSION_RESP: {
-                "topic": f"saj/{self.serial_number}/{SajMqtt.MQTT_DATA_TRANSMISSION_RESP}",
+            SAJ_MQTT_DATA_TRANSMISSION_RESP: {
+                "topic": f"saj/{self.serial_number}/{SAJ_MQTT_DATA_TRANSMISSION_RESP}",
                 "msg_callback": self._handle_data_transmission_rsp,
-                "encoding": None
+                "qos": SAJ_MQTT_QOS,
+                "encoding": None,
             }
         }
-
-        _LOGGER.debug("Subscribing to topics %s" % (topics.keys(),))
-
-        mqtt = self.mqtt
-        unsubscribe_callbacks = dict()
-
+        LOGGER.debug(f"Subscribing to topics: {list(topics.keys())}")
+        unsubscribe_callbacks = {}
         for item, topic_data in topics.items():
-            unsubscribe_callbacks[item] = await mqtt.async_subscribe(topic_data['topic'], topic_data['msg_callback'], 2, topic_data['encoding'])
-
+            unsubscribe_callbacks[item] = await self.mqtt.async_subscribe(
+                topic_data["topic"],
+                topic_data["msg_callback"],
+                topic_data["qos"],
+                topic_data["encoding"],
+            )
         return unsubscribe_callbacks
 
-    def forge_packet(self, start: int, count: int) -> bytes:
-        """
-            Make a data_transmission mqtt body content to request registers from start for the
-            given amount of registers. We can query up to 123 registers with a single request
+    def forge_packet(self, start: int, count: int) -> tuple[bytes, int]:
+        """Forge a data_transmission packet.
+
+        Make a data_transmission mqtt body content to request registers from start for the given amount of registers.
+        We can query up to 123 registers with a single request.
         """
 
-        _LOGGER.debug("Creating MQTT packet")
-
+        LOGGER.debug("Creating MQTT packet")
         content = pack(">BBHH", 0x01, 0x03, start, count)
         crc16 = computeCRC(content)
 
         req_id = int(random() * 65536)
-        rnd_value = int(random() * 65536)
-
-        packet = pack(">HBBH", req_id, 0x58, 0xc9, rnd_value) + content + pack(">H", crc16)
-
-        _LOGGER.debug("Request ID: %04x - CRC16: %04x - Random: %04x" % (req_id, crc16, rnd_value))
-        _LOGGER.debug("Length: %d bytes" % (len(packet),))
-
+        rand = int(random() * 65536)
+        packet = pack(">HBBH", req_id, 0x58, 0xC9, rand) + content + pack(">H", crc16)
+        LOGGER.debug(
+            f"Packet request id: {req_id:04x} - CRC16: {crc16:04x} - random: {rand:04x}"
+        )
+        LOGGER.debug(f"Packet length: {len(packet)} bytes")
         packet = pack(">H", len(packet)) + packet
 
         return packet, req_id
 
-    async def query(self, start_register: int, count: int, timeout: int = 10) -> bytes | None:
+    async def query(
+        self,
+        start_register: int,
+        count: int,
+        timeout: int = SAJ_MQTT_DATA_TRANSMISSION_TIMEOUT,
+    ) -> bytes | None:
+        """Query the inverter for a number of registers.
+
+        This method hides all the package splitting and
+        returns the raw bytes if successful, or raises a timeout exception in
+        case the results do not arrive or None in case data could not be sent
         """
-            Query a number of registers. This method hides all the package splitting and
-            returns the raw bytes if successful, or raises a timeout exception in
-            case the results do not arrive or None in case data could not be sent
-        """
+        LOGGER.debug("Querying inverter")
+        self.responses.clear()  # clear previous responses
+        topic = f"saj/{self.serial_number}/{SAJ_MQTT_DATA_TRANSMISSION}"
 
-        _LOGGER.debug("Querying inverter")
-
-        mqtt = self.mqtt
-        responses = self.responses
-        topic = f"saj/{self.serial_number}/{SajMqtt.MQTT_DATA_TRANSMISSION}"
-
-        responses.clear()
-
-        # Forge the MQTT data_transmission packets to send to the inverter
-        packets = []
+        # Create the MQTT data_transmission packets to send to the inverter
+        packets: list[tuple[bytes, int]] = []
         while count > 0:
-            regs_count = min(count, SajMqtt.MAX_REGISTERS_PER_QUERY)
+            regs_count = min(count, SAJ_MQTT_MAX_REGISTERS_PER_QUERY)
             packet = self.forge_packet(start_register, regs_count)
             packets.append(packet)
             start_register += regs_count
             count -= regs_count
-
         try:
-            async with async_timeout.timeout(timeout):
-                # Publish the request MQTT packets
+            async with asyncio.timeout(timeout):
+                # Publish the packets
                 for packet, req_id in packets:
-                    responses[req_id] = None
-                    await mqtt.async_publish(self.hass, topic, packet, 2, False, None)
-                    _LOGGER.debug("Published data_transmission MQTT packet with req_id: 0x%x" % (req_id, ))
-
-                _LOGGER.debug("All MQTT packets published")
+                    self.responses[req_id] = None
+                    LOGGER.debug(
+                        f"Publishing packet with request id: {f'{req_id:04x}'}"
+                    )
+                    await self.mqtt.async_publish(
+                        self.hass, topic, packet, 2, False, None
+                    )
+                LOGGER.debug("All packets published")
 
                 # Wait for the answer packets
                 while True:
-                    if all(responses.values()) is True:
+                    LOGGER.debug(
+                        f"Waiting for responses with request id: {[f'{k:04x}' for k in self.responses]}"
+                    )
+                    if all(self.responses.values()) is True:
                         break
                     await asyncio.sleep(1)
-
-                _LOGGER.debug("All MQTT responses received")
+                LOGGER.debug("All responses received")
 
                 # Concatenate the payloads, so we get the full answer
                 data = bytearray()
-                for req_id, response in responses.items():
+                for req_id, response in self.responses.items():
                     data += response
 
-        except TimeoutError as te:
-            _LOGGER.warning("Timeout error, inverter did not answer in expected timeout")
+        except asyncio.TimeoutError:
+            LOGGER.warning(
+                "Timeout error: the inverter did not answer in expected timeout"
+            )
             data = None
         except HomeAssistantError as ex:
-            _LOGGER.warning("Could not publish data_transmission MQTT packets, reason: %s" % (ex,))
+            LOGGER.warning(
+                f"Could not publish {SAJ_MQTT_DATA_TRANSMISSION} packets, reason: {ex}"
+            )
             data = None
 
         # Cleanup self.responses from request ids generated in this method
         for packet, req_id in packets:
-            try:
-                del responses[req_id]
-            except KeyError:
-                pass
+            with contextlib.suppress(KeyError):
+                del self.responses[req_id]
 
         return data
