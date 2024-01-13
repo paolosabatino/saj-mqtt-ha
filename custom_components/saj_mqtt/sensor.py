@@ -186,7 +186,6 @@ class RealtimeDataSensor(CoordinatorEntity, SensorEntity):
         """Handle updated data from the coordinator."""
         payload = self.coordinator.data
         if payload is None:
-            LOGGER.debug("No coordinator data received")
             return
 
         # Get raw sensor value
@@ -220,6 +219,7 @@ class EnergyStatisticsSensor(CoordinatorEntity, SensorEntity):
 
         self.sensor_name = sensor_name
         self.offset = offset
+        self.scale = 0.01  # fixed scale for all energy statistics sensors
 
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
         self._attr_device_class = SensorDeviceClass.ENERGY
@@ -236,10 +236,10 @@ class EnergyStatisticsSensor(CoordinatorEntity, SensorEntity):
 
         # Get raw sensor value
         (value,) = unpack_from(">I", payload, self.offset)
-        LOGGER.debug(f"Sensor: {self.name}, raw value: {value}")
+        LOGGER.debug(f"Sensor: {self.name}, raw value: {value}, scale: {self.scale}")
 
         # Set sensor value (taking fixed scale into account)
-        self._attr_native_value = value * 0.01
+        self._attr_native_value = value * self.scale
 
         self.async_write_ha_state()
 

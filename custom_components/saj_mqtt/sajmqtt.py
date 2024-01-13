@@ -14,10 +14,12 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     LOGGER,
+    MODBUS_DEVICE_ADDRESS,
+    MODBUS_MAX_REGISTERS_PER_QUERY,
+    MODBUS_READ_REQUEST,
     SAJ_MQTT_DATA_TRANSMISSION,
     SAJ_MQTT_DATA_TRANSMISSION_RESP,
     SAJ_MQTT_DATA_TRANSMISSION_TIMEOUT,
-    SAJ_MQTT_MAX_REGISTERS_PER_QUERY,
     SAJ_MQTT_QOS,
 )
 
@@ -43,40 +45,53 @@ class SajMqtt:
 
     async def deinitialize(self) -> None:
         """Deinitialize."""
-        for item, callback in self.unsubscribe_callbacks.items():
-            await callback()
+        for item, unsubscribe_callback in self.unsubscribe_callbacks.items():
+            await unsubscribe_callback()
 
     def _parse_packet(self, packet):
-        """Parse a mqtt response data_transmission_rsp payload packet."""
-        length, req_id, timestamp, request = unpack_from(">HHIH", packet, 0x00)
+        """Parse a mqtt response data_transmission_rsp payload packet.
 
+        Packet consists of [HEADER][SIZE][CONTENT][CRC]:
+        - [HEADER] consists of [LENGTH][REQ_ID][TIMESTAMP][REQ_TYPE]
+        - [SIZE] of the following content
+        - [CONTENT] of the registers
+        - [CRC] checksum
+        """
+        # Get the header
+        length, req_id, timestamp, req_type = unpack_from(">HHIH", packet, 0x00)
+        req_type -= (
+            0x100  # substract 0x100 to match the request type (modbus read or write)
+        )
         date = datetime.fromtimestamp(timestamp)
+
+        # Get the size of the content
         (size,) = unpack_from(">B", packet, 0xA)
+
+        # Get the content
         content = packet[0xB : 0xB + size]
+
+        # Get the CRC
         (crc16,) = unpack_from(">H", packet, 0xB + size)
 
         # CRC is calculated starting from "request" at offset 0x3a
         calc_crc = computeCRC(packet[0x8 : 0xB + size])
 
         LOGGER.debug(f"Request id: {req_id:04x}")
-        LOGGER.debug(f"Request type: {request:04x}")
+        LOGGER.debug(f"Request type: {req_type:04x}")
         LOGGER.debug(f"Length: {length} bytes")
         LOGGER.debug(f"Timestamp: {date}")
-        LOGGER.debug(f"Register size: {size}")
+        LOGGER.debug(f"Register size: {size} bytes")
         LOGGER.debug(f"Register content: {':'.join(f'{byte:02x}' for byte in content)}")
-        LOGGER.debug(f"CRC16: {crc16}: {'ok' if crc16 == calc_crc else 'bad'}")
+        LOGGER.debug(f"CRC16: {crc16} -> {'ok' if crc16 == calc_crc else 'bad'}")
 
         return req_id, size, content
 
     @callback
     def _handle_data_transmission_rsp(self, msg: ReceiveMessage) -> None:
         """Handle a single packet received from MQTT."""
-        topic = msg.topic
-        payload = msg.payload
-
         try:
             LOGGER.debug(f"Received {SAJ_MQTT_DATA_TRANSMISSION_RESP} packet")
-            req_id, size, content = self._parse_packet(payload)
+            req_id, size, content = self._parse_packet(msg.payload)
             if req_id in self.responses:
                 LOGGER.debug("Required packet for request")
                 self.responses[req_id] = content
@@ -101,8 +116,8 @@ class SajMqtt:
             unsubscribe_callbacks[item] = await self.mqtt.async_subscribe(
                 topic_data["topic"],
                 topic_data["msg_callback"],
-                topic_data["qos"],
-                topic_data["encoding"],
+                qos=topic_data["qos"],
+                encoding=topic_data["encoding"],
             )
         return unsubscribe_callbacks
 
@@ -111,12 +126,22 @@ class SajMqtt:
 
         Make a data_transmission mqtt body content to request registers from start for the given amount of registers.
         We can query up to 123 registers with a single request.
+
+        Packet consists of [LENTH][HEADER][CONTENT][CRC]:
+        - [LENGTH] of [HEADER][CONTENT][CRC]
+        - [HEADER] consists of [REQ_ID][...][...][RANDOM]
+        - [CONTENT] consists of [DEVICE_ADDRESS][REQ_TYPE][REGISTER_START][REGISTER_COUNT]
+        - [CRC] checksum
         """
 
-        LOGGER.debug("Creating MQTT packet")
-        content = pack(">BBHH", 0x01, 0x03, start, count)
+        LOGGER.debug("Creating MQTT MODBUS packet")
+        # Create modbus part
+        content = pack(
+            ">BBHH", MODBUS_DEVICE_ADDRESS, MODBUS_READ_REQUEST, start, count
+        )
         crc16 = computeCRC(content)
 
+        # Assemble the modbus part into the MQTT packet framework
         req_id = int(random() * 65536)
         rand = int(random() * 65536)
         packet = pack(">HBBH", req_id, 0x58, 0xC9, rand) + content + pack(">H", crc16)
@@ -147,7 +172,7 @@ class SajMqtt:
         # Create the MQTT data_transmission packets to send to the inverter
         packets: list[tuple[bytes, int]] = []
         while count > 0:
-            regs_count = min(count, SAJ_MQTT_MAX_REGISTERS_PER_QUERY)
+            regs_count = min(count, MODBUS_MAX_REGISTERS_PER_QUERY)
             packet = self.forge_packet(start_register, regs_count)
             packets.append(packet)
             start_register += regs_count
@@ -161,7 +186,7 @@ class SajMqtt:
                         f"Publishing packet with request id: {f'{req_id:04x}'}"
                     )
                     await self.mqtt.async_publish(
-                        self.hass, topic, packet, 2, False, None
+                        self.hass, topic, packet, qos=2, retain=False, encoding=None
                     )
                 LOGGER.debug("All packets published")
 
