@@ -196,7 +196,7 @@ class SajMqtt:
                 # Wait for the answer packets
                 while True:
                     LOGGER.debug(
-                        f"Waiting for responses with request id: {[f'{k:04x}' for k in self.responses]}"
+                        f"Waiting for responses with request id: {[f'{k:04x}' for k,v in self.responses.items() if v is None]}"
                     )
                     if all(self.responses.values()) is True:
                         break
