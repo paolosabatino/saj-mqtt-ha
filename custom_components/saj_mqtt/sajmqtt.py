@@ -44,7 +44,10 @@ class SajMqtt:
         self.unsubscribe_callbacks = await self._subscribe_topics()
 
     async def deinitialize(self) -> None:
-        """Deinitialize."""
+        """Deinitialize.
+
+        Currently not used, as we set up via async_setup_platform(), which doesn't support unloading
+        """
         for item, unsubscribe_callback in self.unsubscribe_callbacks.items():
             await unsubscribe_callback()
 

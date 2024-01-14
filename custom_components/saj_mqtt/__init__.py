@@ -1,6 +1,7 @@
 """The SAJ MQTT integration."""
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 
 import voluptuous as vol
@@ -51,6 +52,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         LOGGER.error("MQTT integration is not available")
         return False
 
+    # Make sure SAJ MQTT integration is properly configured
     if DOMAIN not in config or CONF_SERIAL_NUMBER not in config[DOMAIN]:
         LOGGER.error("SAJ MQTT integration is not configured correctly")
         return False
@@ -72,15 +74,16 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await saj_mqtt.initialize()
     hass.data[DOMAIN][DATA_SAJMQTT] = saj_mqtt
 
-    # Setup coordinator and load initial data
+    # Setup coordinator
     LOGGER.debug("Setting up coordinator")
     coordinator = SajMqttCoordinator(hass, saj_mqtt, scan_interval)
-    # Disabled as it times out the first time
-    # Replaced by using update_before_add=True in async_add_entities() in sensor.py
-    # await coordinator.async_refresh()
     hass.data[DOMAIN][DATA_COORDINATOR] = coordinator
 
-    LOGGER.debug("Setting up plaforms")
+    # Wait some time go give the system time to subscribe
+    # Without this, the initial data retrieval is not being picked up
+    await asyncio.sleep(1)
+
+    LOGGER.debug(f"Setting up plaforms: {[p.value for p in PLATFORMS]}")
     for plaform in PLATFORMS:
         hass.async_create_task(
             discovery.async_load_platform(hass, plaform, DOMAIN, {}, conf)

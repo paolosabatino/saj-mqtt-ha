@@ -146,9 +146,7 @@ async def async_setup_platform(
             sensors.append(sensor)
             offset += 4
 
-    # Add the entities
-    # Use update_before_add=True
-    # This to replace await coordinator.async_refresh() in __init__.py
+    # Add the entities (use update_before_add=True to fetch initial data)
     LOGGER.info(f"Setting up {len(sensors)} sensors")
     async_add_entities(sensors, update_before_add=True)
 
@@ -189,7 +187,6 @@ class RealtimeDataSensor(CoordinatorEntity, SensorEntity):
             return
 
         # Get raw sensor value
-        LOGGER.debug("Coordinator data received")
         (value,) = unpack_from(self.data_type, payload, self.offset)
         LOGGER.debug(f"Sensor: {self.name}, raw value: {value}, scale: {self.scale}")
 
