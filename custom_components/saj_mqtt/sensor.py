@@ -23,7 +23,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DATA_COORDINATOR, DATA_SAJMQTT, DOMAIN, LOGGER
+from .const import DATA_COORDINATOR, DATA_SAJMQTT, DOMAIN, LOGGER, InverterWorkingMode
 from .coordinator import SajMqttCoordinator
 from .sajmqtt import SajMqtt
 
@@ -39,6 +39,7 @@ MAP_SAJ_REALTIME_DATA = (
     ("minute", 0x5, ">B", None, None, None, None),
     ("second", 0x6, ">B", None, None, None, None),
 
+    ("inverter_working_mode", 0x8, ">H", None, None, SensorDeviceClass.ENUM, InverterWorkingMode),
     ("heatsink_temperature", 0x20, ">h", 0.1, UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT),
     ("earth_leakage_current", 0x24, ">H", 1.0, UnitOfElectricCurrent.MILLIAMPERE, SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT),
 
@@ -173,10 +174,21 @@ class RealtimeDataSensor(CoordinatorEntity, SensorEntity):
         self.data_type = data_type
         self.offset = offset
         self.scale = scale
+        # Use state class as enum class when device class is ENUM
+        self.enum_class = (
+            state_class if device_class is SensorDeviceClass.ENUM else None
+        )
 
         self._attr_native_unit_of_measurement = unit
         self._attr_device_class = device_class
-        self._attr_state_class = state_class
+        # Clear state class when device class is ENUM
+        self._attr_state_class = (
+            state_class if device_class is not SensorDeviceClass.ENUM else None
+        )
+        # Set options as enum names when device class is ENUM
+        self._attr_options = (
+            [e.name for e in self.enum_class] if self.enum_class else None
+        )
         self._attr_name = f"{DOMAIN}_{self.sensor_name}"
 
     @callback
@@ -194,6 +206,10 @@ class RealtimeDataSensor(CoordinatorEntity, SensorEntity):
         if self.scale is not None:
             value *= self.scale
         self._attr_native_value = value
+
+        # Convert enum sensor to enum value
+        if self.enum_class:
+            self._attr_native_value = self.enum_class(self._attr_native_value).name
 
         self.async_write_ha_state()
 
