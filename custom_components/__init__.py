@@ -1,1 +1,0 @@
-"""The SAJ MQTT component."""
