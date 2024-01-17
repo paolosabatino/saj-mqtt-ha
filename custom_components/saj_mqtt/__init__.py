@@ -24,6 +24,7 @@ from .const import (
 )
 from .coordinator import SajMqttCoordinator
 from .sajmqtt import SajMqtt
+from .services import async_register_services
 
 CONFIG_SCHEMA = vol.Schema(
     {
@@ -78,6 +79,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     LOGGER.debug("Setting up coordinator")
     coordinator = SajMqttCoordinator(hass, saj_mqtt, scan_interval)
     hass.data[DOMAIN][DATA_COORDINATOR] = coordinator
+
+    # Register services (no need to await as function itself is not async)
+    async_register_services(hass)
 
     # Wait some time go give the system time to subscribe
     # Without this, the initial data retrieval is not being picked up

@@ -1,0 +1,14 @@
+# Describes the format for available saj_mqtt services
+
+# Set the inverter app mode
+set_app_mode:
+  fields:
+    app_mode:
+      required: true
+      selector:
+        select:
+          options:
+            - "SELF_USE"
+            - "TIME_OF_USE"
+            - "BACKUP"
+            - "PASSIVE"

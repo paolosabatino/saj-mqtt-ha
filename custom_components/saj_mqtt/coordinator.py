@@ -1,4 +1,6 @@
 """DataUpdateCoordinators for SAJ MQTT integration."""
+from __future__ import annotations
+
 from datetime import timedelta
 
 from homeassistant.core import HomeAssistant

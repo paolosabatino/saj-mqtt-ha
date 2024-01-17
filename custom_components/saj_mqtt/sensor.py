@@ -23,7 +23,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DATA_COORDINATOR, DATA_SAJMQTT, DOMAIN, LOGGER, InverterWorkingMode
+from .const import DATA_COORDINATOR, DATA_SAJMQTT, DOMAIN, LOGGER, WorkingMode
 from .coordinator import SajMqttCoordinator
 from .sajmqtt import SajMqtt
 
@@ -39,7 +39,7 @@ MAP_SAJ_REALTIME_DATA = (
     ("minute", 0x5, ">B", None, None, None, None),
     ("second", 0x6, ">B", None, None, None, None),
 
-    ("inverter_working_mode", 0x8, ">H", None, None, SensorDeviceClass.ENUM, InverterWorkingMode),
+    ("inverter_working_mode", 0x8, ">H", None, None, SensorDeviceClass.ENUM, WorkingMode),
     ("heatsink_temperature", 0x20, ">h", 0.1, UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT),
     ("earth_leakage_current", 0x24, ">H", 1.0, UnitOfElectricCurrent.MILLIAMPERE, SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT),
 
