@@ -24,7 +24,7 @@ def async_register_services(hass: HomeAssistant) -> None:
     async def set_app_mode(call: ServiceCall) -> None:
         saj_mqtt: SajMqtt = hass.data[DOMAIN][DATA_SAJMQTT]
         app_mode = AppMode[call.data[ATTR_APP_MODE]].value
-        saj_mqtt.write(MODBUS_REG_APP_MODE, app_mode)
+        saj_mqtt.write_register(MODBUS_REG_APP_MODE, app_mode)
 
     LOGGER.debug(f"Registering service: {SERVICE_SET_APP_MODE}")
     hass.services.async_register(
