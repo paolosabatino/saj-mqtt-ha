@@ -16,6 +16,7 @@ from homeassistant.helpers.typing import ConfigType
 from .const import (
     CONF_SCAN_INTERVAL,
     CONF_SERIAL_NUMBER,
+    DATA_CONFIG,
     DATA_COORDINATOR,
     DATA_SAJMQTT,
     DEFAULT_SCAN_INTERVAL,
@@ -69,6 +70,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     LOGGER.info(
         f"Setting up SAJ MQTT integration - inverter serial: {serial_number} - scan interval: {scan_interval}"
     )
+    hass.data[DOMAIN][DATA_CONFIG] = conf
 
     # Setup saj mqtt
     saj_mqtt = SajMqtt(hass, serial_number)
@@ -90,7 +92,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     LOGGER.debug(f"Setting up plaforms: {[p.value for p in PLATFORMS]}")
     for plaform in PLATFORMS:
         hass.async_create_task(
-            discovery.async_load_platform(hass, plaform, DOMAIN, {}, conf)
+            discovery.async_load_platform(
+                hass, plaform, DOMAIN, {}, hass.data[DOMAIN][DATA_CONFIG]
+            )
         )
 
     return True

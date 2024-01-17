@@ -6,12 +6,14 @@ from enum import Enum
 import logging
 
 DOMAIN = "saj_mqtt"
+MANUFACTURER = "SAJ Electric"
 
 # Configuration constants
 CONF_SERIAL_NUMBER = "serial_number"
 CONF_SCAN_INTERVAL = "scan_interval"
 
 # Data constants
+DATA_CONFIG = "config"
 DATA_SAJMQTT = "sajmqtt"
 DATA_COORDINATOR = "coordinator"
 

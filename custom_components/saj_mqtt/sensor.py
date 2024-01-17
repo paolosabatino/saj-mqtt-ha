@@ -19,13 +19,21 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DATA_COORDINATOR, DATA_SAJMQTT, DOMAIN, LOGGER, WorkingMode
+from .const import (
+    CONF_SERIAL_NUMBER,
+    DATA_CONFIG,
+    DATA_COORDINATOR,
+    DOMAIN,
+    LOGGER,
+    MANUFACTURER,
+    WorkingMode,
+)
 from .coordinator import SajMqttCoordinator
-from .sajmqtt import SajMqtt
 
 # fmt: off
 
@@ -117,8 +125,16 @@ async def async_setup_platform(
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
     """Set up the sensor platform."""
-    saj_mqtt: SajMqtt = hass.data[DOMAIN][DATA_SAJMQTT]
     coordinator: SajMqttCoordinator = hass.data[DOMAIN][DATA_COORDINATOR]
+    serial_number: str = hass.data[DOMAIN][DATA_CONFIG][CONF_SERIAL_NUMBER]
+
+    device_info: DeviceInfo = {
+        "identifiers": {(DOMAIN, serial_number)},
+        "name": f"SAJ {serial_number}",
+        "manufacturer": MANUFACTURER,
+        "model": "H1 series",
+        "serial_number": serial_number,
+    }
 
     LOGGER.info("Setting up sensors")
     sensors = []
@@ -129,7 +145,7 @@ async def async_setup_platform(
         if config_tuple[5] is None:
             continue
 
-        sensor = RealtimeDataSensor(coordinator, saj_mqtt.serial_number, config_tuple)
+        sensor = RealtimeDataSensor(coordinator, device_info, config_tuple)
         LOGGER.debug(f"Setting up realtime data sensor: {sensor.name}")
         sensors.append(sensor)
 
@@ -141,7 +157,7 @@ async def async_setup_platform(
         for period in "daily", "monthly", "yearly", "total":
             sensor_name = f"{name}_{period}"
             sensor = EnergyStatisticsSensor(
-                coordinator, saj_mqtt.serial_number, sensor_name, offset
+                coordinator, device_info, sensor_name, offset
             )
             LOGGER.debug(f"Setting up energy statistics sensor: {sensor.name}")
             sensors.append(sensor)
@@ -155,7 +171,9 @@ async def async_setup_platform(
 class RealtimeDataSensor(CoordinatorEntity, SensorEntity):
     """Realtime data sensor."""
 
-    def __init__(self, coordinator, serial_number, config_tuple) -> None:
+    def __init__(
+        self, coordinator: SajMqttCoordinator, device_info: DeviceInfo, config_tuple
+    ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         (
@@ -168,9 +186,6 @@ class RealtimeDataSensor(CoordinatorEntity, SensorEntity):
             state_class,
         ) = config_tuple
 
-        self.serial_number = serial_number
-
-        self.sensor_name = sensor_name
         self.data_type = data_type
         self.offset = offset
         self.scale = scale
@@ -179,17 +194,22 @@ class RealtimeDataSensor(CoordinatorEntity, SensorEntity):
             state_class if device_class is SensorDeviceClass.ENUM else None
         )
 
-        self._attr_native_unit_of_measurement = unit
+        # Set entity attributes
+        self._attr_unique_id = f"{DOMAIN}_{device_info['serial_number']}_{sensor_name}"
+        self._attr_name = f"{DOMAIN}_{sensor_name}"
         self._attr_device_class = device_class
         # Clear state class when device class is ENUM
         self._attr_state_class = (
             state_class if device_class is not SensorDeviceClass.ENUM else None
         )
+        self._attr_native_unit_of_measurement = unit
         # Set options as enum names when device class is ENUM
         self._attr_options = (
             [e.name for e in self.enum_class] if self.enum_class else None
         )
-        self._attr_name = f"{DOMAIN}_{self.sensor_name}"
+
+        # Set device info
+        self._attr_device_info = device_info
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -213,31 +233,32 @@ class RealtimeDataSensor(CoordinatorEntity, SensorEntity):
 
         self.async_write_ha_state()
 
-    @property
-    def unique_id(self):
-        """Return a unique identifier for the sensor."""
-        return f"{DOMAIN}_{self.serial_number}_{self.sensor_name}"
-
 
 class EnergyStatisticsSensor(CoordinatorEntity, SensorEntity):
     """Energy statistics sensor."""
 
     def __init__(
-        self, coordinator, serial_number: str, sensor_name: str, offset: int
+        self,
+        coordinator: SajMqttCoordinator,
+        device_info: DeviceInfo,
+        sensor_name: str,
+        offset: int,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
 
-        self.serial_number = serial_number
-
-        self.sensor_name = sensor_name
         self.offset = offset
         self.scale = 0.01  # fixed scale for all energy statistics sensors
 
-        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+        # Set entity attributes
+        self._attr_unique_id = f"{DOMAIN}_{device_info['serial_number']}_{sensor_name}"
+        self._attr_name = f"{DOMAIN}_{sensor_name}"
         self._attr_device_class = SensorDeviceClass.ENERGY
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
-        self._attr_name = f"{DOMAIN}_{self.sensor_name}"
+        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+
+        # Set device info
+        self._attr_device_info = device_info
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -255,8 +276,3 @@ class EnergyStatisticsSensor(CoordinatorEntity, SensorEntity):
         self._attr_native_value = value * self.scale
 
         self.async_write_ha_state()
-
-    @property
-    def unique_id(self):
-        """Return a unique identifier for the sensor."""
-        return f"{DOMAIN}_{self.serial_number}_{self.sensor_name}"

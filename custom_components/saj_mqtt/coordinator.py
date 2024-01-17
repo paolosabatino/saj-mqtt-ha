@@ -29,5 +29,9 @@ class SajMqttCoordinator(DataUpdateCoordinator):
         """Fetch the data."""
         # Query inverter via mqtt for data
         LOGGER.debug("Fetching data")
-        data = await self.saj_mqtt.read_realtime_data(0x4000, 0x100)
-        return data
+        return await self._fetch_realtime_data()
+
+    async def _fetch_realtime_data(self) -> bytearray | None:
+        """Read the realtime data."""
+        LOGGER.debug("Fetching realtime data")
+        return await self.saj_mqtt.read_registers(0x4000, 0x100)

@@ -61,14 +61,16 @@ class SajMqtt:
         for unsubscribe_callback in self.unsubscribe_callbacks.values():
             await unsubscribe_callback()
 
-    async def read_realtime_data(
+    async def read_registers(
         self,
         start_register: int,
         count: int,
         timeout: int = SAJ_MQTT_DATA_TRANSMISSION_TIMEOUT,
     ) -> bytearray | None:
-        """Read the realtime data registers from the inverter.
+        """Read 1 or more registers from the inverter.
 
+        We can read up to 123 registers with a single request.
+        Because a modbus response cannot exceed 256 bytes. (123 registers = 246 bytes, plus some overhead)
         This method hides all the package splitting and returns the raw bytes if successful.
         It returns None in case data could not be retrieved in time.
         """
@@ -268,7 +270,6 @@ class SajMqtt:
         """Create a mqtt read packet.
 
         Create the data_transmission mqtt body content to read registers from start for the given amount of registers.
-        We can query up to 123 registers with a single request.
 
         Packet consists of [LENTH][HEADER][CONTENT][CRC]:
         - [LENGTH] of [HEADER][CONTENT][CRC]
