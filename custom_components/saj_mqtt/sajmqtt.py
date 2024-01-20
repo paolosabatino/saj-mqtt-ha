@@ -44,7 +44,7 @@ class SajMqtt:
             f"saj/{self.serial_number}/{SAJ_MQTT_DATA_TRANSMISSION_RSP}"
         )
 
-        self.query_responses = OrderedDict()
+        self.read_responses = OrderedDict()
         self.write_responses = OrderedDict()
 
         self.unsubscribe_callbacks = {}
@@ -63,8 +63,8 @@ class SajMqtt:
 
     async def read_registers(
         self,
-        start_register: int,
-        count: int,
+        register_start: int,
+        register_count: int,
         timeout: int = SAJ_MQTT_DATA_TRANSMISSION_TIMEOUT,
     ) -> bytearray | None:
         """Read 1 or more registers from the inverter.
@@ -74,22 +74,23 @@ class SajMqtt:
         This method hides all the package splitting and returns the raw bytes if successful.
         It returns None in case data could not be retrieved in time.
         """
-        LOGGER.debug("Reading realtime data")
-        self.query_responses.clear()  # clear previous responses
+        LOGGER.debug(f"Reading registers at {register_start}, length: {register_count}")
 
         # Create the MQTT data_transmission packets to send to the inverter
         packets: list[tuple[bytes, int]] = []
-        while count > 0:
-            regs_count = min(count, MODBUS_MAX_REGISTERS_PER_QUERY)
-            packet = self._create_mqtt_read_packet(start_register, regs_count)
+        while register_count > 0:
+            reg_count = min(register_count, MODBUS_MAX_REGISTERS_PER_QUERY)
+            packet = self._create_mqtt_read_packet(register_start, reg_count)
             packets.append(packet)
-            start_register += regs_count
-            count -= regs_count
+            register_start += reg_count
+            register_count -= reg_count
         try:
             async with asyncio.timeout(timeout):
                 # Publish the packets
+                req_ids = []
                 for packet, req_id in packets:
-                    self.query_responses[req_id] = None
+                    req_ids.append(req_id)
+                    self.read_responses[req_id] = None
                     LOGGER.debug(
                         f"Publishing packet with request id: {f'{req_id:04x}'}"
                     )
@@ -105,17 +106,22 @@ class SajMqtt:
 
                 # Wait for the answer packets
                 while True:
-                    LOGGER.debug(
-                        f"Waiting for responses with request id: {[f'{k:04x}' for k,v in self.query_responses.items() if v is None]}"
+                    responses = OrderedDict(
+                        (k, self.read_responses[k])
+                        for k in req_ids
+                        if k in self.read_responses
                     )
-                    if all(self.query_responses.values()) is True:
+                    if all(responses.values()) is True:
                         break
+                    LOGGER.debug(
+                        f"Waiting for responses with request id: {[f'{k:04x}' for k in req_ids if responses[k] is None]}"
+                    )
                     await asyncio.sleep(1)
                 LOGGER.debug("All responses received")
 
                 # Concatenate the payloads, so we get the full answer
                 data = bytearray()
-                for response in self.query_responses.values():
+                for response in responses.values():
                     data += response
 
         except asyncio.TimeoutError:
@@ -129,10 +135,10 @@ class SajMqtt:
             )
             data = None
 
-        # Cleanup self.query_responses from request ids generated in this method
-        for _, req_id in packets:
+        # Remove req_ids from self.read_responses
+        for req_id in req_ids:
             with contextlib.suppress(KeyError):
-                del self.query_responses[req_id]
+                del self.read_responses[req_id]
 
         return data
 
@@ -163,11 +169,11 @@ class SajMqtt:
 
                 # Wait for the answer packet
                 while True:
+                    if self.write_responses[req_id]:
+                        break
                     LOGGER.debug(
                         f"Waiting for response with request id: {f'{req_id:04x}' if self.write_responses[req_id] is None else ''}"
                     )
-                    if self.write_responses[req_id]:
-                        break
                     await asyncio.sleep(1)
                 LOGGER.debug("Response received")
 
@@ -220,9 +226,8 @@ class SajMqtt:
         try:
             LOGGER.debug(f"Received {SAJ_MQTT_DATA_TRANSMISSION_RSP} packet")
             req_id, size, content = self._parse_packet(msg.payload)
-            if req_id in self.query_responses:
-                LOGGER.debug("Required packet for request")
-                self.query_responses[req_id] = content
+            if req_id in self.read_responses:
+                self.read_responses[req_id] = content
         except Exception as ex:
             LOGGER.error(
                 f"Error while handling {SAJ_MQTT_DATA_TRANSMISSION_RSP} packet: {ex}"
@@ -260,9 +265,9 @@ class SajMqtt:
         LOGGER.debug(f"Request type: {req_type:04x}")
         LOGGER.debug(f"Length: {length} bytes")
         LOGGER.debug(f"Timestamp: {date}")
-        LOGGER.debug(f"Register size: {size} bytes")
-        LOGGER.debug(f"Register content: {':'.join(f'{byte:02x}' for byte in content)}")
-        LOGGER.debug(f"CRC16: {crc16} -> {'ok' if crc16 == calc_crc else 'bad'}")
+        LOGGER.debug(f"Response length: {size} bytes")
+        LOGGER.debug(f"Response bytes: {':'.join(f'{b:02x}' for b in content)}")
+        LOGGER.debug(f"CRC16: {crc16:04x} -> {'ok' if crc16 == calc_crc else 'bad'}")
 
         return req_id, size, content
 
@@ -314,10 +319,10 @@ class SajMqtt:
         req_id = int(random() * 65536)
         rand = int(random() * 65536)
         packet = pack(">HBBH", req_id, 0x58, 0xC9, rand) + content + pack(">H", crc16)
-        LOGGER.debug(
-            f"Packet request id: {req_id:04x} - CRC16: {crc16:04x} - random: {rand:04x}"
-        )
-        LOGGER.debug(f"Packet length: {len(packet)} bytes")
+        LOGGER.debug(f"Request id: {req_id:04x}")
+        LOGGER.debug(f"CRC16: {crc16:04x}")
+        LOGGER.debug(f"Request length: {len(packet)} bytes")
+        LOGGER.debug(f"Request bytes: {':'.join(f'{b:02x}' for b in packet)}")
         packet = pack(">H", len(packet)) + packet
 
         return packet, req_id
