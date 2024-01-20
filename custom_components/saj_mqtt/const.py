@@ -6,7 +6,9 @@ from enum import Enum
 import logging
 
 DOMAIN = "saj_mqtt"
+BRAND = "SAJ"
 MANUFACTURER = "SAJ Electric"
+MODEL = "H1 series"
 
 # Configuration constants
 CONF_SERIAL_NUMBER = "serial_number"

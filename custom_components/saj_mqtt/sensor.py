@@ -25,12 +25,14 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    BRAND,
     CONF_SERIAL_NUMBER,
     DATA_CONFIG,
     DATA_COORDINATOR,
     DOMAIN,
     LOGGER,
     MANUFACTURER,
+    MODEL,
     WorkingMode,
 )
 from .coordinator import SajMqttCoordinator
@@ -45,48 +47,48 @@ MAP_SAJ_INVERTER_INFO = (
     ("inverter_type", 0, ">H", None, None, None, None, False),
     ("inverter_sub_type", 2, ">H", None, None, None, None, False),
     ("inverter_comm_pro_version", 4, ">H", 0.001, None, None, None, False),
-    ("inverter_serial_number", 6, ">S20", None, None, None, None, False),
+    ("inverter_serial_number", 6, ">S20", None, None, None, None, True),
     ("inverter_product_code", 26, ">S20", None, None, None, None, False),
-    ("inverter_display_sw_version", 46, ">H", 0.001, None, None, None, False),
-    ("inverter_master_control_sw_version", 48, ">H", 0.001, None, None, None, False),
-    ("inverter_slave_control_sw_version", 50, ">H", 0.001, None, None, None, False),
-    ("inverter_display_board_hw_version", 52, ">H", 0.001, None, None, None, False),
-    ("inverter_control_board_hw_version", 54, ">H", 0.001, None, None, None, False),
-    ("inverter_power_board_hw_version", 56, ">H", 0.001, None, None, None, False),
-    ("inverter_battery_numbers", 58, ">H", None, None, None, None, False),
+    ("inverter_display_sw_version", 46, ">H", "0.001", None, None, None, True),
+    ("inverter_master_control_sw_version", 48, ">H", "0.001", None, None, None, True),
+    ("inverter_slave_control_sw_version", 50, ">H", "0.001", None, None, None, False),
+    ("inverter_display_board_hw_version", 52, ">H", "0.001", None, None, None, False),
+    ("inverter_control_board_hw_version", 54, ">H", "0.001", None, None, None, False),
+    ("inverter_power_board_hw_version", 56, ">H", "0.001", None, None, None, False),
+    ("inverter_battery_numbers", 58, ">H", None, None, None, None, False), # always 0
 )
 
 # battery info packet fields
 MAP_SAJ_BATTERY_INFO = (
     ("battery_1_bms_type", 0, ">H", None, None, None, None, False),
     ("battery_1_bms_serial_number", 2, ">S16", None, None, None, None, False),
-    ("battery_1_bms_sf_version", 18, ">H", 0.001, None, None, None, False),
-    ("battery_1_bms_hw_version", 20, ">H", 0.001, None, None, None, False),
+    ("battery_1_bms_sf_version", 18, ">H", "0.001", None, None, None, False),
+    ("battery_1_bms_hw_version", 20, ">H", "0.001", None, None, None, False),
     ("battery_1_type", 22, ">H", None, None, None, None, False),
     ("battery_1_serial_number", 24, ">S16", None, None, None, None, False),
     ("battery_2_bms_type", 40, ">H", None, None, None, None, False),
     ("battery_2_bms_serial_number", 42, ">S16", None, None, None, None, False),
-    ("battery_2_bms_sf_version", 58, ">H", 0.001, None, None, None, False),
-    ("battery_2_bms_hw_version", 60, ">H", 0.001, None, None, None, False),
+    ("battery_2_bms_sf_version", 58, ">H", "0.001", None, None, None, False),
+    ("battery_2_bms_hw_version", 60, ">H", "0.001", None, None, None, False),
     ("battery_2_type", 62, ">H", None, None, None, None, False),
     ("battery_2_serial_number", 64, ">S16", None, None, None, None, False),
     ("battery_3_bms_type", 80, ">H", None, None, None, None, False),
     ("battery_3_bms_serial_number", 82, ">S16", None, None, None, None, False),
-    ("battery_3_bms_sf_version", 98, ">H", 0.001, None, None, None, False),
-    ("battery_3_bms_hw_version", 100, ">H", 0.001, None, None, None, False),
+    ("battery_3_bms_sf_version", 98, ">H", "0.001", None, None, None, False),
+    ("battery_3_bms_hw_version", 100, ">H", "0.001", None, None, None, False),
     ("battery_3_type", 102, ">H", None, None, None, None, False),
     ("battery_3_serial_number", 104, ">S16", None, None, None, None, False),
     ("battery_4_bms_type", 120, ">H", None, None, None, None, False),
     ("battery_4_bms_serial_number", 122, ">S16", None, None, None, None, False),
-    ("battery_4_bms_sf_version", 138, ">H", 0.001, None, None, None, False),
-    ("battery_4_bms_hw_version", 140, ">H", 0.001, None, None, None, False),
+    ("battery_4_bms_sf_version", 138, ">H", "0.001", None, None, None, False),
+    ("battery_4_bms_hw_version", 140, ">H", "0.001", None, None, None, False),
     ("battery_4_type", 142, ">H", None, None, None, None, False),
     ("battery_4_serial_number", 144, ">S16", None, None, None, None, False),
 )
 
 # battery controller data packet fields
 MAP_SAJ_BATTERY_CONTROLLER_DATA = (
-    ("battery_numbers", 0, ">H", None, None, None, None, False),
+    ("battery_numbers", 0, ">H", None, None, None, None, True),
     ("battery_capacity", 2, ">H", None, "AH", None, None, False),
     ("battery_1_fault", 4, ">H", None, None, None, None, False),
     ("battery_1_warning", 6, ">H", None, None, None, None, False),
@@ -217,9 +219,9 @@ async def async_setup_platform(
 
     device_info: DeviceInfo = {
         "identifiers": {(DOMAIN, serial_number)},
-        "name": f"SAJ {serial_number}",
+        "name": f"{BRAND} {serial_number}",
         "manufacturer": MANUFACTURER,
-        "model": "H1 series",
+        "model": MODEL,
         "serial_number": serial_number,
     }
 
@@ -316,7 +318,7 @@ class SajMqttSensor(CoordinatorEntity, SensorEntity):
         self.coordinator_data_key = coordinator_data_key  # data key in coordinator data
         self.data_type: str = data_type
         self.offset: int = offset
-        self.scale: float | int | None = scale
+        self.scale: float | str | None = scale
         self.unit: str | None = unit
         # Use state class as enum class when device class is ENUM
         self.enum_class = (
@@ -357,7 +359,10 @@ class SajMqttSensor(CoordinatorEntity, SensorEntity):
 
         # Set sensor value (taking scale into account, scale should ALWAYS contain a .)
         if self.scale is not None:
-            value = round(value * self.scale, str(self.scale)[::-1].find("."))
+            digits = max(0, str(self.scale)[::-1].find("."))
+            value = round(value * float(self.scale), digits)
+            if isinstance(self.scale, str):
+                value = "{:.{precision}f}".format(value, precision=digits)
         self._attr_native_value = value
 
         # Convert enum sensor to the corresponding enum name
@@ -365,7 +370,7 @@ class SajMqttSensor(CoordinatorEntity, SensorEntity):
             self._attr_native_value = self.enum_class(self._attr_native_value).name
 
         LOGGER.debug(
-            f"Sensor: {self.name}, value: {value}{' ' + self.unit if self.unit else ''}"
+            f"Sensor: {self.name}, value: {self.native_value}{' ' + self.unit if self.unit else ''}"
         )
 
         self.async_write_ha_state()

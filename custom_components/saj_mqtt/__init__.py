@@ -62,11 +62,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     # Get config data
     conf = config[DOMAIN]
     serial_number: str = conf[CONF_SERIAL_NUMBER]
-    scan_interval: timedelta = (
-        conf[CONF_SCAN_INTERVAL]
-        if CONF_SCAN_INTERVAL in conf
-        else DEFAULT_SCAN_INTERVAL
-    )
+    scan_interval: timedelta = conf[CONF_SCAN_INTERVAL]
     LOGGER.info(
         f"Setting up SAJ MQTT integration - inverter serial: {serial_number} - scan interval: {scan_interval}"
     )
