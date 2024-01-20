@@ -348,9 +348,9 @@ class SajMqttSensor(CoordinatorEntity, SensorEntity):
         else:
             (value,) = unpack_from(self.data_type, payload, self.offset)
 
-        # Set sensor value (taking scale into account)
+        # Set sensor value (taking scale into account, scale should ALWAYS contain a .)
         if self.scale is not None:
-            value *= self.scale
+            value = round(value * self.scale, str(self.scale)[::-1].find("."))
         self._attr_native_value = value
 
         # Convert enum sensor to the corresponding enum name
