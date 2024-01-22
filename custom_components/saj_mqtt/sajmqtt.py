@@ -151,7 +151,7 @@ class SajMqtt:
         timeout: int = SAJ_MQTT_DATA_TRANSMISSION_TIMEOUT,
     ) -> int | None:
         """Write a register value to the inverter."""
-        LOGGER.debug(f"Writing inverter register {register:04x}: {value:02x}")
+        LOGGER.debug(f"Writing register {register:04x} with value {value:04x}")
 
         # Create the MQTT data_transmission packet to send to the inverter
         packet, req_id = self._create_mqtt_write_packet(register, value)
@@ -179,7 +179,7 @@ class SajMqtt:
                     await asyncio.sleep(1)
                 LOGGER.debug("Response received")
 
-                # Concatenate the payloads, so we get the full answer
+                # Get the answer
                 data = self.write_responses[req_id]
 
         except asyncio.TimeoutError:
@@ -227,30 +227,52 @@ class SajMqtt:
         """Handle a single packet received from MQTT."""
         try:
             LOGGER.debug(f"Received {SAJ_MQTT_DATA_TRANSMISSION_RSP} packet")
-            req_id, size, content = self._parse_packet(msg.payload)
+            req_id, content = self._parse_packet(msg.payload)
             if req_id in self.read_responses:
                 self.read_responses[req_id] = content
+            if req_id in self.write_responses:
+                self.write_responses[req_id] = content
         except Exception as ex:
             LOGGER.error(
                 f"Error while handling {SAJ_MQTT_DATA_TRANSMISSION_RSP} packet: {ex}"
             )
 
-    def _parse_packet(self, packet):
+    def _parse_packet(self, packet) -> tuple[int, bytearray | int]:
         """Parse a mqtt response data_transmission_rsp payload packet.
 
-        Packet consists of [HEADER][SIZE][CONTENT][CRC]:
+        Packet consists of [HEADER][PACKET_DATA]:
         - [HEADER] consists of [LENGTH][REQ_ID][TIMESTAMP][REQ_TYPE]
-        - [SIZE] of the following content
-        - [CONTENT] of the registers
-        - [CRC] checksum
+        - [PACKET_DATA] see specific packet parsing
         """
-        # Get the header
+        # Parse the header
         length, req_id, timestamp, req_type = unpack_from(">HHIH", packet, 0x00)
         req_type -= (
             0x100  # substract 0x100 to match the request type (modbus read or write)
         )
         date = datetime.fromtimestamp(timestamp)
 
+        LOGGER.debug(f"Request id: {req_id:04x}")
+        LOGGER.debug(f"Request type: {req_type:04x}")
+        LOGGER.debug(f"Length: {length} bytes")
+        LOGGER.debug(f"Timestamp: {date}")
+
+        if req_type == MODBUS_READ_REQUEST:
+            content = self._parse_read_packet(packet)
+        elif req_type == MODBUS_WRITE_REQUEST:
+            content = self._parse_write_packet(packet)
+        else:
+            raise ValueError(f"Unsupported request type: {req_type:04x}")
+
+        return req_id, content
+
+    def _parse_read_packet(self, packet) -> tuple[int, bytearray]:
+        """Parse a mqtt read packet.
+
+        Packet consists of [SIZE][CONTENT][CRC]:
+        - [SIZE] of the following content
+        - [CONTENT] of the registers
+        - [CRC] checksum
+        """
         # Get the size of the content
         (size,) = unpack_from(">B", packet, 0xA)
 
@@ -263,15 +285,39 @@ class SajMqtt:
         # CRC is calculated starting from "request" at offset 0x3a
         calc_crc = computeCRC(packet[0x8 : 0xB + size])
 
-        LOGGER.debug(f"Request id: {req_id:04x}")
-        LOGGER.debug(f"Request type: {req_type:04x}")
-        LOGGER.debug(f"Length: {length} bytes")
-        LOGGER.debug(f"Timestamp: {date}")
         LOGGER.debug(f"Response length: {size} bytes")
         LOGGER.debug(f"Response bytes: {':'.join(f'{b:02x}' for b in content)}")
         LOGGER.debug(f"CRC16: {crc16:04x} -> {'ok' if crc16 == calc_crc else 'bad'}")
 
-        return req_id, size, content
+        if crc16 != calc_crc:
+            raise ValueError("Invalid CRC: expected {calc_crc}, received {crc16}")
+
+        return content
+
+    def _parse_write_packet(self, packet) -> tuple[int, int]:
+        """Parse a mqtt write packet.
+
+        Packet consists of [REGISTER][VALUE][CRC]:
+        - [REGISTER] to which the value was written
+        - [VALUE] written to the register
+        - [CRC] checksum
+        """
+        register, value, orig_crc16 = unpack_from(">HHH", packet, 0xA)
+
+        # Get the CRC
+        (crc16,) = unpack_from(">H", packet, 0xE)
+
+        # CRC is calculated starting from "request" at offset 0x3a
+        calc_crc = computeCRC(packet[0x8:0xE])
+
+        LOGGER.debug(f"Written register: {register:04x}")
+        LOGGER.debug(f"Written value: {value:04x}")
+        LOGGER.debug(f"CRC16: {crc16:04x} -> {'ok' if crc16 == calc_crc else 'bad'}")
+
+        if crc16 != calc_crc:
+            raise ValueError("Invalid CRC: expected {calc_crc}, received {crc16}")
+
+        return register
 
     def _create_mqtt_read_packet(self, start: int, count: int) -> tuple[bytes, int]:
         """Create a mqtt read packet.
