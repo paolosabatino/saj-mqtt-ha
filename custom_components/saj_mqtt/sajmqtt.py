@@ -23,7 +23,9 @@ from .const import (
     SAJ_MQTT_DATA_TRANSMISSION,
     SAJ_MQTT_DATA_TRANSMISSION_RSP,
     SAJ_MQTT_DATA_TRANSMISSION_TIMEOUT,
+    SAJ_MQTT_ENCODING,
     SAJ_MQTT_QOS,
+    SAJ_MQTT_RETAIN,
 )
 
 
@@ -98,9 +100,9 @@ class SajMqtt:
                         self.hass,
                         self.topic_data_transmission,
                         packet,
-                        qos=2,
-                        retain=False,
-                        encoding=None,
+                        qos=SAJ_MQTT_QOS,
+                        retain=SAJ_MQTT_RETAIN,
+                        encoding=SAJ_MQTT_ENCODING,
                     )
                 LOGGER.debug("All packets published")
 
@@ -162,9 +164,9 @@ class SajMqtt:
                     self.hass,
                     self.topic_data_transmission,
                     packet,
-                    qos=2,
-                    retain=False,
-                    encoding=None,
+                    qos=SAJ_MQTT_QOS,
+                    retain=SAJ_MQTT_RETAIN,
+                    encoding=SAJ_MQTT_ENCODING,
                 )
 
                 # Wait for the answer packet
@@ -204,7 +206,7 @@ class SajMqtt:
                 "topic": self.topic_data_transmission_rsp,
                 "msg_callback": self._handle_data_transmission_rsp,
                 "qos": SAJ_MQTT_QOS,
-                "encoding": None,
+                "encoding": SAJ_MQTT_ENCODING,
             }
         }
 
