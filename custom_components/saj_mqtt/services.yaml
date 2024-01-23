@@ -17,12 +17,16 @@ set_app_mode:
 write_register:
   fields:
     register:
-      required: true
+      name: Register
+      description: The register address in hex or decimal format
       example: "0x3247 (hex) or 12871 (decimal)"
+      required: true
       selector:
         text:
     register_value:
-      required: true
+      name: Register value
+      description: The register value in hex or decimal format
       example: "0x1 (hex) or 1 (decimal)"
+      required: true
       selector:
         text:
