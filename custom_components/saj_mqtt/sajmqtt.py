@@ -265,7 +265,7 @@ class SajMqtt:
 
         return req_id, content
 
-    def _parse_read_packet(self, packet) -> tuple[int, bytearray]:
+    def _parse_read_packet(self, packet) -> bytearray:
         """Parse a mqtt read packet.
 
         Packet consists of [SIZE][CONTENT][CRC]:
@@ -294,7 +294,7 @@ class SajMqtt:
 
         return content
 
-    def _parse_write_packet(self, packet) -> tuple[int, int]:
+    def _parse_write_packet(self, packet) -> int:
         """Parse a mqtt write packet.
 
         Packet consists of [REGISTER][VALUE][CRC]:
@@ -317,7 +317,7 @@ class SajMqtt:
         if crc16 != calc_crc:
             raise ValueError("Invalid CRC: expected {calc_crc}, received {crc16}")
 
-        return register
+        return value
 
     def _create_mqtt_read_packet(self, start: int, count: int) -> tuple[bytes, int]:
         """Create a mqtt read packet.
