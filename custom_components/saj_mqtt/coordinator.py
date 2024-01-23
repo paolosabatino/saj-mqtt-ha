@@ -29,6 +29,7 @@ class SajMqttCoordinator(DataUpdateCoordinator):
         self.battery_info: bytearray | None = None
         self.battery_controller_data: bytearray | None = None
         self.realtime_data: bytearray | None = None
+        self.app_mode: int | None = None
 
     async def _async_update_data(self) -> dict[str, bytearray | None] | None:
         """Fetch the data."""
@@ -47,11 +48,15 @@ class SajMqttCoordinator(DataUpdateCoordinator):
         # Fetch realtime data
         self.realtime_data = await self._fetch_realtime_data()
 
+        # Fetch app mode
+        self.app_mode = await self._fetch_app_mode()
+
         return {
             "inverter_info": self.inverter_info,
             "battery_info": self.battery_info,
             "battery_controller_data": self.battery_controller_data,
             "realtime_data": self.realtime_data,
+            "app_mode": self.app_mode,
         }
 
     async def _fetch_inverter_info(self) -> bytearray | None:
@@ -87,5 +92,14 @@ class SajMqttCoordinator(DataUpdateCoordinator):
         reg_count = 0x100  # 256 registers
         LOGGER.debug(
             f"Fetching realtime data at {reg_start:04x}, length: {reg_count:02x}"
+        )
+        return await self.saj_mqtt.read_registers(reg_start, reg_count)
+
+    async def _fetch_app_mode(self) -> int | None:
+        """Fetch the app mode."""
+        reg_start = 0x3247
+        reg_count = 0x1  # 1 register
+        LOGGER.debug(
+            f"Fetching realtime data at {hex(reg_start)}, length: {hex(reg_count)}"
         )
         return await self.saj_mqtt.read_registers(reg_start, reg_count)

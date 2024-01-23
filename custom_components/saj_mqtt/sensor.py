@@ -33,6 +33,7 @@ from .const import (
     LOGGER,
     MANUFACTURER,
     MODEL,
+    AppMode,
     WorkingMode,
 )
 from .coordinator import SajMqttCoordinator
@@ -204,6 +205,11 @@ MAP_SAJ_REALTIME_ENERGY_STATS = (
     ('energy_grid_imported', 0x1ee, ">I", 0.01, UnitOfEnergy.KILO_WATT_HOUR, SensorDeviceClass.ENERGY, SensorStateClass.TOTAL_INCREASING, True)
 )
 
+# app mode packet field
+MAP_SAJ_APP_MODE = (
+    ("app_mode", 0, ">H", None, None, SensorDeviceClass.ENUM, AppMode, True),
+)
+
 # fmt: on
 
 
@@ -281,10 +287,16 @@ async def async_setup_platform(
                 enabled_default,
             )
             sensor = SajMqttSensor(coordinator, "realtime_data", device_info, tmp_tuple)
-            LOGGER.debug(f"Setting up energy statistics sensor: {sensor.name}")
+            LOGGER.debug(f"Setting up realtime energy statistics sensor: {sensor.name}")
             sensors.append(sensor)
             # Update offset for next period
             offset += 4
+
+    # App mode sensor
+    for config_tuple in MAP_SAJ_APP_MODE:
+        sensor = SajMqttSensor(coordinator, "app_mode", device_info, config_tuple)
+        LOGGER.debug(f"Setting up app mode sensor: {sensor.name}")
+        sensors.append(sensor)
 
     # Add the entities (use update_before_add=True to fetch initial data)
     LOGGER.info(f"Setting up {len(sensors)} sensors")
