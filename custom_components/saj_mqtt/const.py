@@ -21,7 +21,10 @@ DATA_COORDINATOR = "coordinator"
 
 # Service constants
 SERVICE_SET_APP_MODE = "set_app_mode"
+SERVICE_WRITE_REGISTER = "write_register"
 ATTR_APP_MODE = "app_mode"
+ATTR_REGISTER = "register"
+ATTR_REGISTER_VALUE = "register_value"
 
 # Modbus constants
 MODBUS_MAX_REGISTERS_PER_QUERY = (

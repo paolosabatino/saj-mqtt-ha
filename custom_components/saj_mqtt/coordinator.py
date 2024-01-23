@@ -8,6 +8,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN, LOGGER
 from .sajmqtt import SajMqtt
+from .utils import log_hex
 
 
 class SajMqttCoordinator(DataUpdateCoordinator):
@@ -64,7 +65,7 @@ class SajMqttCoordinator(DataUpdateCoordinator):
         reg_start = 0x8F00
         reg_count = 0x1E  # 30 registers
         LOGGER.debug(
-            f"Fetching inverter info at {reg_start:04x}, length: {reg_count:02x}"
+            f"Fetching inverter info at {log_hex(reg_start)}, length: {log_hex(reg_count)}"
         )
         return await self.saj_mqtt.read_registers(reg_start, reg_count)
 
@@ -73,7 +74,7 @@ class SajMqttCoordinator(DataUpdateCoordinator):
         reg_start = 0x8E00
         reg_count = 0x50  # 80 registers
         LOGGER.debug(
-            f"Fetching battery info at {reg_start:04x}, length: {reg_count:02x}"
+            f"Fetching battery info at {log_hex(reg_start)}, length: {log_hex(reg_count)}"
         )
         return await self.saj_mqtt.read_registers(reg_start, reg_count)
 
@@ -82,7 +83,7 @@ class SajMqttCoordinator(DataUpdateCoordinator):
         reg_start = 0xA000
         reg_count = 0x24  # 36 registers
         LOGGER.debug(
-            f"Fetching battery controller data at {reg_start:04x}, length: {reg_count:02x}"
+            f"Fetching battery controller data at {log_hex(reg_start)}, length: {log_hex(reg_count)}"
         )
         return await self.saj_mqtt.read_registers(reg_start, reg_count)
 
@@ -91,7 +92,7 @@ class SajMqttCoordinator(DataUpdateCoordinator):
         reg_start = 0x4000
         reg_count = 0x100  # 256 registers
         LOGGER.debug(
-            f"Fetching realtime data at {reg_start:04x}, length: {reg_count:02x}"
+            f"Fetching realtime data at {log_hex(reg_start)}, length: {log_hex(reg_count)}"
         )
         return await self.saj_mqtt.read_registers(reg_start, reg_count)
 
@@ -100,6 +101,6 @@ class SajMqttCoordinator(DataUpdateCoordinator):
         reg_start = 0x3247
         reg_count = 0x1  # 1 register
         LOGGER.debug(
-            f"Fetching realtime data at {hex(reg_start)}, length: {hex(reg_count)}"
+            f"Fetching realtime data at {log_hex(reg_start)}, length: {log_hex(reg_count)}"
         )
         return await self.saj_mqtt.read_registers(reg_start, reg_count)

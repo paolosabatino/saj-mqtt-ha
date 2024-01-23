@@ -12,3 +12,17 @@ set_app_mode:
             - "TIME_OF_USE"
             - "BACKUP"
             - "PASSIVE"
+
+# Write a value to a register of the inverter
+write_register:
+  fields:
+    register:
+      required: true
+      example: "0x3247 (hex) or 12871 (decimal)"
+      selector:
+        text:
+    register_value:
+      required: true
+      example: "0x1 (hex) or 1 (decimal)"
+      selector:
+        text:
