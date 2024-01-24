@@ -101,30 +101,9 @@ class SajMqttCoordinator(DataUpdateCoordinator):
         """Fetch the config data."""
         # Use this if we also want to use the registers in between
         # For now we split it up and join te results to prevent too much unwanted data being fetched
-        # reg_start = 0x3247
-        # reg_count = 0x2E  # 46 registers
-        # return await self.saj_mqtt.read_registers(reg_start, reg_count)
-
-        async def _fetch(reg_start: int, reg_count: int) -> bytearray | None:
-            LOGGER.debug(
-                f"Fetching config data at {log_hex(reg_start)}, length: {log_hex(reg_count)}"
-            )
-            return await self.saj_mqtt.read_registers(reg_start, reg_count)
-
-        # Fetch multiple registers and join them together
-        # Instead of fetching a lot of unwanted registers, lets split it up and fetch them in parallel
-        config_data_regs = {0x3247: 3, 0x3273: 2}
-        datas = await asyncio.gather(
-            *(
-                _fetch(reg_start, reg_count)
-                for reg_start, reg_count in config_data_regs.items()
-            )
+        reg_start = 0x3247
+        reg_count = 0x2E  # 46 registers
+        LOGGER.debug(
+            f"Fetching config data at {log_hex(reg_start)}, length: {log_hex(reg_count)}"
         )
-
-        # Join results together
-        # From the moment 1 of the datas is None, the data should be None to skip sensor updates
-        data = None
-        if all(datas) is True:
-            data = b"".join(datas)
-
-        return data
+        return await self.saj_mqtt.read_registers(reg_start, reg_count)

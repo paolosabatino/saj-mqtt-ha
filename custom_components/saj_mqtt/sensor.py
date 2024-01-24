@@ -210,9 +210,9 @@ MAP_SAJ_CONFIG_DATA = (
     ("app_mode", 0, ">H", None, None, SensorDeviceClass.ENUM, AppMode, True),
     ("grid_charge_power_limit", 2, ">H", None, UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, False),
     ("grid_feed_power_limit", 4, ">H", None, UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, False),
-    # concatenated data, so just continue the offset
-    ("battery_soc_high", 6, ">H", None, PERCENTAGE, SensorDeviceClass.BATTERY, SensorStateClass.MEASUREMENT, False),
-    ("battery_soc_low", 8, ">H", None, PERCENTAGE, SensorDeviceClass.BATTERY, SensorStateClass.MEASUREMENT, False),
+    # unwanted data
+    ("battery_soc_high", 88, ">H", None, PERCENTAGE, SensorDeviceClass.BATTERY, SensorStateClass.MEASUREMENT, False),
+    ("battery_soc_low", 90, ">H", None, PERCENTAGE, SensorDeviceClass.BATTERY, SensorStateClass.MEASUREMENT, False),
 )
 
 # fmt: on
