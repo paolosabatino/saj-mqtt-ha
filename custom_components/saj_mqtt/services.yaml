@@ -30,3 +30,28 @@ write_register:
       required: true
       selector:
         text:
+
+# Read registers of the inverter
+read_register:
+  fields:
+    register:
+      name: Register
+      description: The register address in hex or decimal format
+      example: "0x3247 (hex) or 12871 (decimal)"
+      required: true
+      selector:
+        text:
+    register_size:
+      name: Register size
+      description: The size of the register in hex or decimal format
+      example: "0x1 (hex) or 1 (decimal)"
+      required: true
+      selector:
+        text:
+    register_format:
+      name: Register format
+      description: The register output format (python struct format)
+      example: ">H"
+      required: false
+      selector:
+        text:
