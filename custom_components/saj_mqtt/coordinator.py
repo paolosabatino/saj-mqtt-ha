@@ -1,6 +1,7 @@
 """DataUpdateCoordinators for SAJ MQTT integration."""
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
@@ -30,7 +31,7 @@ class SajMqttCoordinator(DataUpdateCoordinator):
         self.battery_info: bytearray | None = None
         self.battery_controller_data: bytearray | None = None
         self.realtime_data: bytearray | None = None
-        self.app_mode: int | None = None
+        self.config_data: bytearray | None = None
 
     async def _async_update_data(self) -> dict[str, bytearray | None] | None:
         """Fetch the data."""
@@ -49,15 +50,15 @@ class SajMqttCoordinator(DataUpdateCoordinator):
         # Fetch realtime data
         self.realtime_data = await self._fetch_realtime_data()
 
-        # Fetch app mode
-        self.app_mode = await self._fetch_app_mode()
+        # Fetch config data
+        self.config_data = await self._fetch_config_data()
 
         return {
             "inverter_info": self.inverter_info,
             "battery_info": self.battery_info,
             "battery_controller_data": self.battery_controller_data,
             "realtime_data": self.realtime_data,
-            "app_mode": self.app_mode,
+            "config_data": self.config_data,
         }
 
     async def _fetch_inverter_info(self) -> bytearray | None:
@@ -96,11 +97,34 @@ class SajMqttCoordinator(DataUpdateCoordinator):
         )
         return await self.saj_mqtt.read_registers(reg_start, reg_count)
 
-    async def _fetch_app_mode(self) -> int | None:
-        """Fetch the app mode."""
-        reg_start = 0x3247
-        reg_count = 0x1  # 1 register
-        LOGGER.debug(
-            f"Fetching realtime data at {log_hex(reg_start)}, length: {log_hex(reg_count)}"
+    async def _fetch_config_data(self) -> bytearray | None:
+        """Fetch the config data."""
+        # Use this if we also want to use the registers in between
+        # For now we split it up and join te results to prevent too much unwanted data being fetched
+        # reg_start = 0x3247
+        # reg_count = 0x2E  # 46 registers
+        # return await self.saj_mqtt.read_registers(reg_start, reg_count)
+
+        async def _fetch(reg_start: int, reg_count: int) -> bytearray | None:
+            LOGGER.debug(
+                f"Fetching config data at {log_hex(reg_start)}, length: {log_hex(reg_count)}"
+            )
+            return await self.saj_mqtt.read_registers(reg_start, reg_count)
+
+        # Fetch multiple registers and join them together
+        # Instead of fetching a lot of unwanted registers, lets split it up and fetch them in parallel
+        config_data_regs = {0x3247: 3, 0x3273: 2}
+        datas = await asyncio.gather(
+            *(
+                _fetch(reg_start, reg_count)
+                for reg_start, reg_count in config_data_regs.items()
+            )
         )
-        return await self.saj_mqtt.read_registers(reg_start, reg_count)
+
+        # Join results together
+        # From the moment 1 of the datas is None, the data should be None to skip sensor updates
+        data = None
+        if all(datas) is True:
+            data = b"".join(datas)
+
+        return data

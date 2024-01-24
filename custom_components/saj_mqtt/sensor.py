@@ -205,9 +205,14 @@ MAP_SAJ_REALTIME_ENERGY_STATS = (
     ('energy_grid_imported', 0x1ee, ">I", 0.01, UnitOfEnergy.KILO_WATT_HOUR, SensorDeviceClass.ENERGY, SensorStateClass.TOTAL_INCREASING, True)
 )
 
-# app mode packet field
-MAP_SAJ_APP_MODE = (
+# config data packet fields
+MAP_SAJ_CONFIG_DATA = (
     ("app_mode", 0, ">H", None, None, SensorDeviceClass.ENUM, AppMode, True),
+    ("grid_charge_power_limit", 2, ">H", None, UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, False),
+    ("grid_feed_power_limit", 4, ">H", None, UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, False),
+    # concatenated data, so just continue the offset
+    ("battery_soc_high", 6, ">H", None, PERCENTAGE, SensorDeviceClass.BATTERY, SensorStateClass.MEASUREMENT, False),
+    ("battery_soc_low", 8, ">H", None, PERCENTAGE, SensorDeviceClass.BATTERY, SensorStateClass.MEASUREMENT, False),
 )
 
 # fmt: on
@@ -292,10 +297,10 @@ async def async_setup_platform(
             # Update offset for next period
             offset += 4
 
-    # App mode sensor
-    for config_tuple in MAP_SAJ_APP_MODE:
-        sensor = SajMqttSensor(coordinator, "app_mode", device_info, config_tuple)
-        LOGGER.debug(f"Setting up app mode sensor: {sensor.name}")
+    # Config data sensors
+    for config_tuple in MAP_SAJ_CONFIG_DATA:
+        sensor = SajMqttSensor(coordinator, "config_data", device_info, config_tuple)
+        LOGGER.debug(f"Setting up config data sensor: {sensor.name}")
         sensors.append(sensor)
 
     # Add the entities (use update_before_add=True to fetch initial data)
