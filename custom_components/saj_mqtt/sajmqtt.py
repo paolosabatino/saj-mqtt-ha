@@ -212,7 +212,7 @@ class SajMqtt:
         return data
 
     async def _subscribe_topics(self) -> dict:
-        """Subscribe to MQTT topics."""
+        """Subscribe to mqtt topics."""
         topics = {
             SAJ_MQTT_DATA_TRANSMISSION_RSP: {
                 "topic": self.topic_data_transmission_rsp,
@@ -236,7 +236,7 @@ class SajMqtt:
 
     @callback
     def _handle_data_transmission_rsp(self, msg: ReceiveMessage) -> None:
-        """Handle a single packet received from MQTT."""
+        """Handle a mqtt data_transmission_rsp response packet."""
         try:
             debug(f"Received {SAJ_MQTT_DATA_TRANSMISSION_RSP} packet", self.debug_mqtt)
             req_id, content = self._parse_packet(msg.payload)
@@ -244,13 +244,13 @@ class SajMqtt:
                 self.read_responses[req_id] = content
             if req_id in self.write_responses:
                 self.write_responses[req_id] = content
-        except Exception as ex:
+        except Exception as ex:  # pylint: disable=broad-except
             LOGGER.error(
                 f"Error while handling {SAJ_MQTT_DATA_TRANSMISSION_RSP} packet: {ex}"
             )
 
     def _parse_packet(self, packet) -> tuple[int, bytearray | int]:
-        """Parse a mqtt response data_transmission_rsp payload packet.
+        """Parse a mqtt packet.
 
         Packet consists of [HEADER][PACKET_DATA]:
         - [HEADER] consists of [LENGTH][REQ_ID][TIMESTAMP][REQ_TYPE]

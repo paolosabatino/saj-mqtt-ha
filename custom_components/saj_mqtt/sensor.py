@@ -405,6 +405,7 @@ class SajMqttSensor(CoordinatorEntity, SensorEntity):
         if self.scale is not None:
             digits = max(0, str(self.scale)[::-1].find("."))
             value = round(value * float(self.scale), digits)
+            # If scale is a str, format the value with the same precision
             if isinstance(self.scale, str):
                 value = "{:.{precision}f}".format(value, precision=digits)
         self._attr_native_value = value
