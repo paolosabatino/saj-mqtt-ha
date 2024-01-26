@@ -5,6 +5,10 @@ from struct import unpack_from
 
 import voluptuous as vol
 
+from config.custom_components.saj_mqtt.coordinator import (
+    SajMqttBatteryControllerDataCoordinator,
+    SajMqttConfigDataCoordinator,
+)
 from homeassistant import core
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 import homeassistant.helpers.config_validation as cv
@@ -15,11 +19,15 @@ from .const import (
     ATTR_REGISTER_FORMAT,
     ATTR_REGISTER_SIZE,
     ATTR_REGISTER_VALUE,
+    DATA_COORDINATOR_BATTERY_CONTROLLER,
+    DATA_COORDINATOR_CONFIG,
     DATA_SAJMQTT,
     DOMAIN,
     LOGGER,
     MODBUS_REG_APP_MODE,
     SERVICE_READ_REGISTER,
+    SERVICE_REFRESH_BATTERY_CONTROLLER_DATA,
+    SERVICE_REFRESH_CONFIG_DATA,
     SERVICE_SET_APP_MODE,
     SERVICE_WRITE_REGISTER,
     AppMode,
@@ -144,4 +152,36 @@ def async_register_services(hass: HomeAssistant) -> None:
             )
         ),
         supports_response=SupportsResponse.ONLY,
+    )
+
+    async def refresh_config_data(call: ServiceCall) -> None:
+        # Only refresh when coordinator is enabled
+        coordinator: SajMqttConfigDataCoordinator = hass.data[DOMAIN][
+            DATA_COORDINATOR_CONFIG
+        ]
+        if coordinator:
+            LOGGER.debug("Refreshing config data")
+            await coordinator.async_request_refresh()
+
+    LOGGER.debug(f"Registering service: {SERVICE_REFRESH_CONFIG_DATA}")
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REFRESH_CONFIG_DATA,
+        refresh_config_data,
+    )
+
+    async def refresh_battery_controller_data(call: ServiceCall) -> None:
+        # Only refresh when coordinator is enabled
+        coordinator: SajMqttBatteryControllerDataCoordinator = hass.data[DOMAIN][
+            DATA_COORDINATOR_BATTERY_CONTROLLER
+        ]
+        if coordinator:
+            LOGGER.debug("Refreshing battery controller data")
+            await coordinator.async_request_refresh()
+
+    LOGGER.debug(f"Registering service: {SERVICE_REFRESH_BATTERY_CONTROLLER_DATA}")
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REFRESH_BATTERY_CONTROLLER_DATA,
+        refresh_battery_controller_data,
     )

@@ -2,6 +2,7 @@
 
 # Set the inverter app mode
 set_app_mode:
+  description: Set the inverter app mode
   fields:
     app_mode:
       required: true
@@ -13,8 +14,9 @@ set_app_mode:
             - "BACKUP"
             - "PASSIVE"
 
-# Write a value to a register of the inverter
+# Write a register value to the inverter
 write_register:
+  description: Write a register value to the inverter
   fields:
     register:
       name: Register
@@ -31,8 +33,9 @@ write_register:
       selector:
         text:
 
-# Read registers of the inverter
+# Read a register value from the inverter
 read_register:
+  description: Read a register value from the inverter
   fields:
     register:
       name: Register
@@ -55,3 +58,11 @@ read_register:
       required: false
       selector:
         text:
+
+# Refresh the config data sensors
+refresh_config_data:
+    description: Refresh the config data sensors
+
+# Refresh the battery controller data sensors
+refresh_battery_controller_data:
+    description: Refresh the battery controller data sensors
