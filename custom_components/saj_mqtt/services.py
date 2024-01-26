@@ -5,10 +5,6 @@ from struct import unpack_from
 
 import voluptuous as vol
 
-from config.custom_components.saj_mqtt.coordinator import (
-    SajMqttBatteryControllerDataCoordinator,
-    SajMqttConfigDataCoordinator,
-)
 from homeassistant import core
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 import homeassistant.helpers.config_validation as cv
@@ -31,6 +27,10 @@ from .const import (
     SERVICE_SET_APP_MODE,
     SERVICE_WRITE_REGISTER,
     AppMode,
+)
+from .coordinator import (
+    SajMqttBatteryControllerDataCoordinator,
+    SajMqttConfigDataCoordinator,
 )
 from .sajmqtt import SajMqtt
 
