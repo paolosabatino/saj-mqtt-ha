@@ -14,10 +14,37 @@ Edit Home Assistant **configuration.yaml** (usually found in `/home/homeassistan
 saj_mqtt:
     serial_number: {inverter_serial_number}
     scan_interval: {scan_interval}
+    scan_interval_inverter_info: {scan_interval_inverter_info}
+    scan_interval_battery_info: {scan_interval_battery_info}
+    scan_interval_battery_controller: {scan_interval_battery_controller}
+    scan_interval_config: {scan_interval_config}
+    debug_mqtt: {debug_mqtt}
 ```
 
 - `{inverter_serial_number}` is the inverter serial number (required, f.e. `H1S2xxxxxxxxxxxxxx`)
-- `{scan_interval}` is the scan interval in seconds (optional, defaults to `60`)
+- `{scan_interval}` is the scan interval for the realtime data (optional, defaults to `60`)
+- `{scan_interval_inverter_info}` is the scan interval for the inverter info data (optional, defaults to `None`)
+- `{scan_interval_battery_info}` is the scan interval for the battery info data (optional, defaults to `None`)
+- `{scan_interval_battery_controller}` is the scan interval for the battery controller data (optional, defaults to `None`)
+- `{scan_interval_config}` is the scan interval for the config data (optional, defaults to `None`)
+- `{debug_mqtt}` is the flag to indicate detailed mqtt debugging is needed (optional, defaults to `False`)
+
+All scan intervals can be configured as a positive timedelta:
+
+- in seconds: `60`
+- in time string: `"00:01:00"`
+- in timedelta dict format:
+  ```
+  scan_interval:
+    days: 0
+    hours: 0
+    minutes: 0
+    seconds: 60
+  ```
+
+If a scan interval is not defined, the related dataset and sensors will not be fetched and loaded.
+
+Only the realtime dataset will always be fetched by default.
 
 ## Configure the inverter
 The last step is to configure the inverter (actually the Wifi communication module AIO3 attached to the inverter) to talk with the local MQTT broker and not directly with the SAJ broker; to do that, you have two options:

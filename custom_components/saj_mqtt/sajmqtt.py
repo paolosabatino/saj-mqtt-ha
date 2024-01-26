@@ -27,19 +27,22 @@ from .const import (
     SAJ_MQTT_QOS,
     SAJ_MQTT_RETAIN,
 )
-from .utils import log_hex
+from .utils import debug, log_hex
 
 
 class SajMqtt:
     """SAJ MQTT inverter client instance."""
 
-    def __init__(self, hass: HomeAssistant, serial_number: str) -> None:
+    def __init__(
+        self, hass: HomeAssistant, serial_number: str, debug_mqtt: bool
+    ) -> None:
         """Set up the SajMqtt class."""
         super().__init__()
 
         self.hass = hass
         self.mqtt = hass.components.mqtt
         self.serial_number = serial_number
+        self.debug_mqtt = debug_mqtt
         self.topic_data_transmission = (
             f"saj/{self.serial_number}/{SAJ_MQTT_DATA_TRANSMISSION}"
         )
@@ -77,7 +80,7 @@ class SajMqtt:
         This method hides all the package splitting and returns the raw bytes if successful.
         It returns None in case data could not be retrieved in time.
         """
-        LOGGER.debug(
+        debug(
             f"Reading registers at {log_hex(register_start)}, length: {log_hex(register_count)}"
         )
 
@@ -96,8 +99,9 @@ class SajMqtt:
                 for packet, req_id in packets:
                     req_ids.append(req_id)
                     self.read_responses[req_id] = None
-                    LOGGER.debug(
-                        f"Publishing packet with request id: {f'{log_hex(req_id)}'}"
+                    debug(
+                        f"Publishing packet with request id: {f'{log_hex(req_id)}'}",
+                        self.debug_mqtt,
                     )
                     await self.mqtt.async_publish(
                         self.hass,
@@ -107,7 +111,7 @@ class SajMqtt:
                         retain=SAJ_MQTT_RETAIN,
                         encoding=SAJ_MQTT_ENCODING,
                     )
-                LOGGER.debug("All packets published")
+                debug("All packets published", self.debug_mqtt)
 
                 # Wait for the answer packets
                 while True:
@@ -118,11 +122,12 @@ class SajMqtt:
                     )
                     if all(responses.values()) is True:
                         break
-                    LOGGER.debug(
-                        f"Waiting for responses with request id: {[f'{log_hex(k)}' for k in req_ids if responses[k] is None]}"
+                    debug(
+                        f"Waiting for responses with request id: {[f'{log_hex(k)}' for k in req_ids if responses[k] is None]}",
+                        self.debug_mqtt,
                     )
                     await asyncio.sleep(1)
-                LOGGER.debug("All responses received")
+                debug("All responses received", self.debug_mqtt)
 
                 # Concatenate the payloads, so we get the full answer
                 data = bytearray()
@@ -154,9 +159,7 @@ class SajMqtt:
         timeout: int = SAJ_MQTT_DATA_TRANSMISSION_TIMEOUT,
     ) -> int | None:
         """Write a register value to the inverter."""
-        LOGGER.debug(
-            f"Writing register {log_hex(register)} with value {log_hex(value)}"
-        )
+        debug(f"Writing register {log_hex(register)} with value {log_hex(value)}")
 
         # Create the MQTT data_transmission packet to send to the inverter
         packet, req_id = self._create_mqtt_write_packet(register, value)
@@ -164,8 +167,9 @@ class SajMqtt:
             async with asyncio.timeout(timeout):
                 # Publish packet
                 self.write_responses[req_id] = None
-                LOGGER.debug(
-                    f"Publishing packet with request id: {f'{log_hex(req_id)}'}"
+                debug(
+                    f"Publishing packet with request id: {f'{log_hex(req_id)}'}",
+                    self.debug_mqtt,
                 )
                 await self.mqtt.async_publish(
                     self.hass,
@@ -180,11 +184,12 @@ class SajMqtt:
                 while True:
                     if self.write_responses[req_id] is not None:
                         break
-                    LOGGER.debug(
-                        f"Waiting for response with request id: {f'{log_hex(req_id)}' if self.write_responses[req_id] is None else ''}"
+                    debug(
+                        f"Waiting for response with request id: {f'{log_hex(req_id)}' if self.write_responses[req_id] is None else ''}",
+                        self.debug_mqtt,
                     )
                     await asyncio.sleep(1)
-                LOGGER.debug("Response received")
+                debug("Response received", self.debug_mqtt)
 
                 # Get the answer
                 data = self.write_responses[req_id]
@@ -217,7 +222,7 @@ class SajMqtt:
             }
         }
 
-        LOGGER.debug(f"Subscribing to topics: {list(topics.keys())}")
+        debug(f"Subscribing to topics: {list(topics.keys())}")
         unsubscribe_callbacks = {}
         for item, topic_data in topics.items():
             unsubscribe_callbacks[item] = await self.mqtt.async_subscribe(
@@ -233,7 +238,7 @@ class SajMqtt:
     def _handle_data_transmission_rsp(self, msg: ReceiveMessage) -> None:
         """Handle a single packet received from MQTT."""
         try:
-            LOGGER.debug(f"Received {SAJ_MQTT_DATA_TRANSMISSION_RSP} packet")
+            debug(f"Received {SAJ_MQTT_DATA_TRANSMISSION_RSP} packet", self.debug_mqtt)
             req_id, content = self._parse_packet(msg.payload)
             if req_id in self.read_responses:
                 self.read_responses[req_id] = content
@@ -258,10 +263,10 @@ class SajMqtt:
         )
         date = datetime.fromtimestamp(timestamp)
 
-        LOGGER.debug(f"Request id: {log_hex(req_id)}")
-        LOGGER.debug(f"Request type: {log_hex(req_type)}")
-        LOGGER.debug(f"Length: {length} bytes")
-        LOGGER.debug(f"Timestamp: {date}")
+        debug(f"Request id: {log_hex(req_id)}", self.debug_mqtt)
+        debug(f"Request type: {log_hex(req_type)}", self.debug_mqtt)
+        debug(f"Length: {length} bytes", self.debug_mqtt)
+        debug(f"Timestamp: {date}", self.debug_mqtt)
 
         if req_type == MODBUS_READ_REQUEST:
             content = self._parse_read_packet(packet)
@@ -292,10 +297,13 @@ class SajMqtt:
         # CRC is calculated starting from "request" at offset 0x3a
         calc_crc = computeCRC(packet[0x8 : 0xB + size])
 
-        LOGGER.debug(f"Response length: {size} bytes")
-        LOGGER.debug(f"Response bytes: {':'.join(f'{b:02x}' for b in content)}")
-        LOGGER.debug(
-            f"CRC16: {log_hex(crc16)} -> {'ok' if crc16 == calc_crc else 'bad'}"
+        debug(f"Response length: {size} bytes", self.debug_mqtt)
+        debug(
+            f"Response bytes: {':'.join(f'{b:02x}' for b in content)}", self.debug_mqtt
+        )
+        debug(
+            f"CRC16: {log_hex(crc16)} -> {'ok' if crc16 == calc_crc else 'bad'}",
+            self.debug_mqtt,
         )
 
         if crc16 != calc_crc:
@@ -319,10 +327,11 @@ class SajMqtt:
         # CRC is calculated starting from "request" at offset 0x3a
         calc_crc = computeCRC(packet[0x8:0xE])
 
-        LOGGER.debug(f"Written register: {log_hex(register)}")
-        LOGGER.debug(f"Written value: {log_hex(value)}")
-        LOGGER.debug(
-            f"CRC16: {log_hex(crc16)} -> {'ok' if crc16 == calc_crc else 'bad'}"
+        debug(f"Written register: {log_hex(register)}", self.debug_mqtt)
+        debug(f"Written value: {log_hex(value)}", self.debug_mqtt)
+        debug(
+            f"CRC16: {log_hex(crc16)} -> {'ok' if crc16 == calc_crc else 'bad'}",
+            self.debug_mqtt,
         )
 
         if crc16 != calc_crc:
@@ -341,7 +350,7 @@ class SajMqtt:
         - [CONTENT] consists of [DEVICE_ADDRESS][REQ_TYPE][REGISTER_START][REGISTER_COUNT]
         - [CRC] checksum
         """
-        LOGGER.debug("Creating mqtt read packet")
+        debug("Creating mqtt read packet", self.debug_mqtt)
         content = pack(
             ">BBHH", MODBUS_DEVICE_ADDRESS, MODBUS_READ_REQUEST, start, count
         )
@@ -359,7 +368,7 @@ class SajMqtt:
         - [CONTENT] consists of [DEVICE_ADDRESS][REQ_TYPE][REGISTER_START][REGISTER_COUNT]
         - [CRC] checksum
         """
-        LOGGER.debug("Creating mqtt write packet")
+        debug("Creating mqtt write packet", self.debug_mqtt)
         content = pack(
             ">BBHH", MODBUS_DEVICE_ADDRESS, MODBUS_WRITE_REQUEST, register, value
         )
@@ -380,11 +389,13 @@ class SajMqtt:
         req_id = int(random() * 65536)
         rand = int(random() * 65536)
         packet = pack(">HBBH", req_id, 0x58, 0xC9, rand) + content + pack(">H", crc16)
-        LOGGER.debug(f"Request id: {log_hex(req_id)}")
-        LOGGER.debug(f"Request type: {log_hex(req_type)}")
-        LOGGER.debug(f"CRC16: {log_hex(crc16)}")
-        LOGGER.debug(f"Request length: {len(packet)} bytes")
-        LOGGER.debug(f"Request bytes: {':'.join(f'{b:02x}' for b in packet)}")
+
+        debug(f"Request id: {log_hex(req_id)}", self.debug_mqtt)
+        debug(f"Request type: {log_hex(req_type)}", self.debug_mqtt)
+        debug(f"CRC16: {log_hex(crc16)}", self.debug_mqtt)
+        debug(f"Request length: {len(packet)} bytes", self.debug_mqtt)
+        debug(f"Request bytes: {':'.join(f'{b:02x}' for b in packet)}", self.debug_mqtt)
+
         packet = pack(">H", len(packet)) + packet
 
         return packet, req_id

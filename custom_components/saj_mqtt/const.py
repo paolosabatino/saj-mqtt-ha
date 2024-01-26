@@ -12,12 +12,21 @@ MODEL = "H1 series"
 
 # Configuration constants
 CONF_SERIAL_NUMBER = "serial_number"
-CONF_SCAN_INTERVAL = "scan_interval"
+CONF_SCAN_INTERVAL = "scan_interval"  # for realtime data
+CONF_SCAN_INTERVAL_INVERTER_INFO = "scan_interval_inverter_info"
+CONF_SCAN_INTERVAL_BATTERY_INFO = "scan_interval_battery_info"
+CONF_SCAN_INTERVAL_BATTERY_CONTROLLER = "scan_interval_battery_controller"
+CONF_SCAN_INTERVAL_CONFIG = "scan_interval_config"
+CONF_DEBUG_MQTT = "debug_mqtt"
 
 # Data constants
 DATA_CONFIG = "config"
 DATA_SAJMQTT = "sajmqtt"
 DATA_COORDINATOR = "coordinator"
+DATA_COORDINATOR_INVERTER_INFO = "coordinator_inverter_info"
+DATA_COORDINATOR_BATTERY_INFO = "coordinator_battery_info"
+DATA_COORDINATOR_BATTERY_CONTROLLER = "coordinator_battery_controller"
+DATA_COORDINATOR_CONFIG = "coordinator_config"
 
 # Service constants
 SERVICE_SET_APP_MODE = "set_app_mode"
