@@ -60,6 +60,9 @@ SAJ_MQTT_DATA_TRANSMISSION_TIMEOUT = 10
 # Default constants
 DEFAULT_SCAN_INTERVAL = timedelta(seconds=60)
 
+# Other constants
+STARTUP = "startup"
+
 LOGGER = logging.getLogger(__package__)
 
 

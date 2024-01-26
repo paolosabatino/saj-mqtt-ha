@@ -31,6 +31,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     LOGGER,
+    STARTUP,
 )
 from .coordinator import (
     SajMqttBatteryControllerDataCoordinator,
@@ -54,19 +55,23 @@ CONFIG_SCHEMA = vol.Schema(
                 vol.Optional(
                     CONF_SCAN_INTERVAL_INVERTER_INFO,
                     default=None,
-                ): vol.Any(cv.positive_time_period, None),
+                ): vol.Any(cv.positive_time_period, STARTUP, None),
                 vol.Optional(
                     CONF_SCAN_INTERVAL_BATTERY_INFO,
                     default=None,
-                ): vol.Any(cv.positive_time_period, None),
+                ): vol.Any(
+                    cv.positive_time_period,
+                    STARTUP,
+                    None,
+                ),
                 vol.Optional(
                     CONF_SCAN_INTERVAL_BATTERY_CONTROLLER,
                     default=None,
-                ): vol.Any(cv.positive_time_period, None),
+                ): vol.Any(cv.positive_time_period, STARTUP, None),
                 vol.Optional(
                     CONF_SCAN_INTERVAL_CONFIG,
                     default=None,
-                ): vol.Any(cv.positive_time_period, None),
+                ): vol.Any(cv.positive_time_period, STARTUP, None),
                 vol.Optional(
                     CONF_DEBUG_MQTT,
                     default=False,
@@ -110,14 +115,16 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     conf = config[DOMAIN]
     serial_number: str = conf[CONF_SERIAL_NUMBER]
     scan_interval: timedelta = conf[CONF_SCAN_INTERVAL]
-    scan_interval_inverter_info: timedelta | None = conf[
+    scan_interval_inverter_info: timedelta | str | None = conf[
         CONF_SCAN_INTERVAL_INVERTER_INFO
     ]
-    scan_interval_battery_info: timedelta | None = conf[CONF_SCAN_INTERVAL_BATTERY_INFO]
-    scan_interval_battery_controller: timedelta | None = conf[
+    scan_interval_battery_info: timedelta | str | None = conf[
+        CONF_SCAN_INTERVAL_BATTERY_INFO
+    ]
+    scan_interval_battery_controller: timedelta | str | None = conf[
         CONF_SCAN_INTERVAL_BATTERY_CONTROLLER
     ]
-    scan_interval_config: timedelta | None = conf[CONF_SCAN_INTERVAL_CONFIG]
+    scan_interval_config: timedelta | str | None = conf[CONF_SCAN_INTERVAL_CONFIG]
     debug_mqtt: bool = conf[CONF_DEBUG_MQTT]
     hass.data[DOMAIN][DATA_CONFIG] = conf
 
@@ -146,29 +153,39 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.data[DOMAIN][DATA_COORDINATOR] = coordinator
     # Inverter info data coordinators
     if scan_interval_inverter_info:
+        interval = scan_interval_inverter_info
+        if scan_interval_inverter_info == STARTUP:
+            interval = None  # set to None to only trigger once at startup
         coordinator_inverter_info = SajMqttInverterInfoDataCoordinator(
-            hass, saj_mqtt, scan_interval_inverter_info
+            hass, saj_mqtt, interval
         )
         hass.data[DOMAIN][DATA_COORDINATOR_INVERTER_INFO] = coordinator_inverter_info
     # Battery info data coordinator
     if scan_interval_battery_info:
+        interval = scan_interval_battery_info
+        if scan_interval_battery_info == STARTUP:
+            interval = None  # set to None to only trigger once at startup
         coordinator_battery_info = SajMqttBatteryInfoDataCoordinator(
-            hass, saj_mqtt, scan_interval_battery_info
+            hass, saj_mqtt, interval
         )
         hass.data[DOMAIN][DATA_COORDINATOR_BATTERY_INFO] = coordinator_battery_info
     # Battery controller data coordinators
     if scan_interval_battery_controller:
+        interval = scan_interval_battery_controller
+        if scan_interval_battery_controller == STARTUP:
+            interval = None  # set to None to only trigger once at startup
         coordinator_battery_controller = SajMqttBatteryControllerDataCoordinator(
-            hass, saj_mqtt, scan_interval_battery_controller
+            hass, saj_mqtt, interval
         )
         hass.data[DOMAIN][
             DATA_COORDINATOR_BATTERY_CONTROLLER
         ] = coordinator_battery_controller
     # Config data coordinator
     if scan_interval_config:
-        coordinator_config = SajMqttConfigDataCoordinator(
-            hass, saj_mqtt, scan_interval_config
-        )
+        interval = scan_interval_config
+        if scan_interval_config == STARTUP:
+            interval = None  # set to None to only trigger once at startup
+        coordinator_config = SajMqttConfigDataCoordinator(hass, saj_mqtt, interval)
         hass.data[DOMAIN][DATA_COORDINATOR_CONFIG] = coordinator_config
 
     # Register services (no need to await as function itself is not async)

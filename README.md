@@ -21,18 +21,39 @@ saj_mqtt:
     debug_mqtt: {debug_mqtt}
 ```
 
-- `{inverter_serial_number}` is the inverter serial number (required, f.e. `H1S2xxxxxxxxxxxxxx`)
-- `{scan_interval}` is the scan interval for the realtime data (optional, defaults to `60`)
-- `{scan_interval_inverter_info}` is the scan interval for the inverter info data (optional, defaults to `None`)
-- `{scan_interval_battery_info}` is the scan interval for the battery info data (optional, defaults to `None`)
-- `{scan_interval_battery_controller}` is the scan interval for the battery controller data (optional, defaults to `None`)
-- `{scan_interval_config}` is the scan interval for the config data (optional, defaults to `None`)
-- `{debug_mqtt}` is the flag to indicate detailed mqtt debugging is needed (optional, defaults to `False`)
+The `{inverter_serial_number}` is the inverter serial number (required, f.e. `H1S2xxxxxxxxxxxxxx`).
+
+The `{scan_interval}` is the scan interval for the realtime data (optional, defaults to `60`).
+This is realtime data.
+This is always fetched.
+Do not set lower than `10` seconds!
+
+The `{scan_interval_inverter_info}` is the scan interval for the inverter info data (optional, defaults to `None`).
+This is static data.
+This is only needed if you want to read the inverter info.
+If required, set to `startup` or a slow scan interval like `days: 1`.
+
+The `{scan_interval_battery_info}` is the scan interval for the battery info data (optional, defaults to `None`).
+This is static data.
+This is only needed if you want to read the battery info.
+If required, set to `startup` or a slow scan interval like `days: 1`.
+
+The `{scan_interval_battery_controller}` is the scan interval for the battery controller data (optional, defaults to `None`).
+This is realtime data.
+This is only needed if you have multiple batteries and want to know the details of each battery individually.
+Do not set lower than `10` seconds.
+
+The`{scan_interval_config}` is the scan interval for the config data (optional, defaults to `None`).
+This is static data, but it can be changed via app or by writing to the registers.
+This is only needed if you want to read config data.
+If required, set to `startup` or a slow scan interval like `days: 1`.
+
+The`{debug_mqtt}` is the flag to indicate detailed mqtt debugging is needed (optional, defaults to `False`)
 
 All scan intervals can be configured as a positive timedelta:
 
 - in seconds: `60`
-- in time string: `"00:01:00"`
+- in time string format: `"00:01:00"`
 - in timedelta dict format:
   ```
   scan_interval:
@@ -41,6 +62,8 @@ All scan intervals can be configured as a positive timedelta:
     minutes: 0
     seconds: 60
   ```
+
+All scan intervals, except the default realtime `scan_interval`, can also be set to `startup` to only scan the data at startup.
 
 If a scan interval is not defined, the related dataset and sensors will not be fetched and loaded.
 
