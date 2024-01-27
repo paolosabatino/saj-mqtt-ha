@@ -75,3 +75,11 @@ The last step is to configure the inverter (actually the Wifi communication modu
 - Change the MQTT broker using eSAJ Home app (see [this](https://play.google.com/store/apps/details?id=com.saj.esolarhome)) to your local MQTT broker.
 - Poison your local DNS to redirect the MQTT messages to your broker. This consists in telling your home router to point to your broker IP when domain **mqtt.saj-solar.com** is queried by the inverter, so refer to your router capabilities to handle this. This may require some time for the inverter to discover that the broker IP changed, so you may want to remove and reinstall the Wifi AIO3 module to restart it. Optionally, you can additionally bridge your local MQTT broker to SAJ mqtt broker if you still want to use the eSAJ Home app. For instructions, see [this](https://github.com/paolosabatino/saj-mqtt-ha/discussions/4).
 
+## HA services
+This integration also exposes a few services that can be used from within home assistant.
+The following services are available:
+- `saj_mqtt.set_app_mode`, to write a specific app mode (from a list of predefined values)
+- `saj_mqtt.write_register`, to write to any value to any register (USE AT OWN RISK AS THIS CAN DAMAGE YOUR INVERTER!)
+- `saj_mqtt.read_register`, to read a value of any register
+- `saj_mqtt.refresh_config_data`, to refresh the config data sensors
+- `saj_mqtt.refresh_battery_controller_data`, to refresh teh battery controller data sensors
