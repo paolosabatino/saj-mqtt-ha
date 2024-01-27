@@ -265,9 +265,9 @@ async def async_setup_platform(
     ]
 
     # Realtime data sensors
+    await coordinator.async_refresh()
     for config_tuple in MAP_SAJ_REALTIME_DATA:
         sensor = SajMqttSensor(coordinator, device_info, config_tuple)
-        LOGGER.debug(f"Setting up realtime data sensor: {sensor.name}")
         sensors.append(sensor)
 
     # Energy statistics sensors
@@ -297,47 +297,47 @@ async def async_setup_platform(
                 enabled_default,
             )
             sensor = SajMqttSensor(coordinator, device_info, tmp_tuple)
-            LOGGER.debug(f"Setting up realtime energy statistics sensor: {sensor.name}")
             sensors.append(sensor)
             # Update offset for next period
             offset += 4
 
     # Inverter info sensors
     if coordinator_inverter_info:
+        await coordinator_inverter_info.async_refresh()
         for config_tuple in MAP_SAJ_INVERTER_INFO:
             sensor = SajMqttSensor(coordinator_inverter_info, device_info, config_tuple)
-            LOGGER.debug(f"Setting up inverter info sensor: {sensor.name}")
             sensors.append(sensor)
 
     # Battery info sensors
     if coordinator_battery_info:
+        await coordinator_battery_info.async_refresh()
         for config_tuple in MAP_SAJ_BATTERY_INFO:
             sensor = SajMqttSensor(coordinator_battery_info, device_info, config_tuple)
-            LOGGER.debug(f"Setting up battery info sensor: {sensor.name}")
             sensors.append(sensor)
 
     # Battery controller data sensors
     if coordinator_battery_controller:
+        await coordinator_battery_controller.async_refresh()
         for config_tuple in MAP_SAJ_BATTERY_CONTROLLER_DATA:
             sensor = SajMqttSensor(
                 coordinator_battery_controller, device_info, config_tuple
             )
-            LOGGER.debug(f"Setting up battery controller data sensor: {sensor.name}")
             sensors.append(sensor)
 
     # Config data sensors
     if coordinator_config:
+        await coordinator_config.async_refresh()
         for config_tuple in MAP_SAJ_CONFIG_DATA:
             sensor = SajMqttSensor(coordinator_config, device_info, config_tuple)
-            LOGGER.debug(f"Setting up config data sensor: {sensor.name}")
             sensors.append(sensor)
 
-    # Add the entities (use update_before_add=True to fetch initial data)
+    # Add the entities
+    # Use of update_before_add=True seems to have issues (first sensor not loaded on first fetch)
     LOGGER.info(f"Setting up {len(sensors)} sensors")
-    async_add_entities(sensors, update_before_add=True)
+    async_add_entities(sensors)
 
 
-class SajMqttSensor(CoordinatorEntity, SensorEntity):
+class SajMqttSensor(CoordinatorEntity[SajMqttDataCoordinator], SensorEntity):
     """Saj mqtt sensor."""
 
     def __init__(
@@ -359,7 +359,6 @@ class SajMqttSensor(CoordinatorEntity, SensorEntity):
             enabled_default,
         ) = config_tuple
 
-        self.coordinator = coordinator  # set coordinator again for typing support
         self.data_type: str = data_type
         self.offset: int = offset
         self.scale: float | str | None = scale
@@ -383,18 +382,22 @@ class SajMqttSensor(CoordinatorEntity, SensorEntity):
             [e.name for e in self.enum_class] if self.enum_class else None
         )
         self._attr_entity_registry_enabled_default = enabled_default
+        # Set entity value
+        LOGGER.debug(f"Setting up sensor: {self.name}")
+        self._attr_native_value = self._get_native_value()
 
         # Set device info
         self._attr_device_info = device_info
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
+    def _get_native_value(self) -> int | float | str | None:
+        """Get the native value for the sensor."""
+        # Return None if no coordinator data
         payload = self.coordinator.data
         if payload is None:
             return None
 
         # Get raw sensor value (>Sxx is custom type to indicate a string of length xx)
+        value: int | float | str | None = None
         if self.data_type.startswith(">S"):
             reg_length = int(self.data_type.replace(">S", ""))
             value = bytearray.decode(payload[self.offset : self.offset + reg_length])
@@ -408,14 +411,24 @@ class SajMqttSensor(CoordinatorEntity, SensorEntity):
             # If scale is a str, format the value with the same precision
             if isinstance(self.scale, str):
                 value = "{:.{precision}f}".format(value, precision=digits)
-        self._attr_native_value = value
 
         # Convert enum sensor to the corresponding enum name
         if self.enum_class:
-            self._attr_native_value = self.enum_class(self._attr_native_value).name
+            value = self.enum_class(value).name
 
         LOGGER.debug(
-            f"Sensor: {self.name}, value: {self.native_value}{' ' + self.unit if self.unit else ''}"
+            f"Sensor: {self.name}, value: {value}{' ' + self.unit if self.unit else ''}"
         )
 
+        return value
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        value = self._get_native_value()
+        if value is None:
+            return None
+
+        # Only update sensor when there is a value
+        self._attr_native_value = value
         self.async_write_ha_state()
