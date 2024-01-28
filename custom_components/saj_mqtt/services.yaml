@@ -1,0 +1,68 @@
+# Describes the format for available saj_mqtt services
+
+# Set the inverter app mode
+set_app_mode:
+  description: Set the inverter app mode
+  fields:
+    app_mode:
+      required: true
+      selector:
+        select:
+          options:
+            - "SELF_USE"
+            - "TIME_OF_USE"
+            - "BACKUP"
+            - "PASSIVE"
+
+# Write a register value to the inverter
+write_register:
+  description: Write a register value to the inverter
+  fields:
+    register:
+      name: Register
+      description: The register address in hex or decimal format
+      example: "0x3247 (hex) or 12871 (decimal)"
+      required: true
+      selector:
+        text:
+    register_value:
+      name: Register value
+      description: The register value in hex or decimal format
+      example: "0x1 (hex) or 1 (decimal)"
+      required: true
+      selector:
+        text:
+
+# Read a register value from the inverter
+read_register:
+  description: Read a register value from the inverter
+  fields:
+    register:
+      name: Register
+      description: The register address in hex or decimal format
+      example: "0x3247 (hex) or 12871 (decimal)"
+      required: true
+      selector:
+        text:
+    register_size:
+      name: Register size
+      description: The size of the register in hex or decimal format
+      example: "0x1 (hex) or 1 (decimal)"
+      required: true
+      selector:
+        text:
+    register_format:
+      name: Register format
+      description: The register output format (python struct format)
+      example: ">H"
+      required: false
+      selector:
+        text:
+
+# Refresh the config data sensors
+refresh_config_data:
+    description: Refresh the config data sensors
+
+# Refresh the battery controller data sensors
+refresh_battery_controller_data:
+    description: Refresh the battery controller data sensors
