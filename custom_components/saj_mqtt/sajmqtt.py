@@ -10,6 +10,7 @@ from struct import pack, unpack_from
 
 from pymodbus.utilities import computeCRC
 
+from homeassistant.components import mqtt
 from homeassistant.components.mqtt import ReceiveMessage
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
@@ -40,7 +41,7 @@ class SajMqtt:
         super().__init__()
 
         self.hass = hass
-        self.mqtt = hass.components.mqtt
+        self.mqtt = mqtt
         self.serial_number = serial_number
         self.debug_mqtt = debug_mqtt
         self.topic_data_transmission = (
@@ -226,6 +227,7 @@ class SajMqtt:
         unsubscribe_callbacks = {}
         for item, topic_data in topics.items():
             unsubscribe_callbacks[item] = await self.mqtt.async_subscribe(
+                self.hass,
                 topic_data["topic"],
                 topic_data["msg_callback"],
                 qos=topic_data["qos"],
